@@ -10,13 +10,13 @@ from datetime import datetime
 
 
 class JarvisPipeline:
-    def __init__(self, capture_duration=5, whisper_model='small'):
+    def __init__(self, capture_duration=5, whisper_model='small', wake_word='hey_jarvis', wake_threshold=0.35):
         self.capture = VoiceCapture(duration=capture_duration)
         self.transcriber = Transcriber(model_name=whisper_model)
         self.parser = IntentParser()
         self.audit_log = Path('logs/pipeline.jsonl')
         self.audit_log.parent.mkdir(exist_ok=True)
-        self.listener = WakeListener(on_detect=self.on_wake_detected)
+        self.listener = WakeListener(wake_word=wake_word, threshold=wake_threshold, on_detect=self.on_wake_detected)
 
     def on_wake_detected(self, wake_word, score):
         """Called when wake word detected — record, transcribe, parse."""

@@ -17,6 +17,8 @@ def main():
     pipeline = JarvisPipeline(
         capture_duration=int(os.getenv('CAPTURE_DURATION', '5')),
         whisper_model=os.getenv('WHISPER_MODEL', 'small'),
+        wake_word=os.getenv('WAKE_WORD', 'hey_jarvis'),
+        wake_threshold=float(os.getenv('WAKE_THRESHOLD', '0.35')),
     )
     pipeline.run()
 
