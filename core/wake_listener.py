@@ -13,7 +13,7 @@ class WakeListener:
     def __init__(self, wake_word='hey_jarvis', threshold=0.5, on_detect=None):
         self.threshold = threshold
         self.on_detect = on_detect or self.default_handler
-        self.model = Model(wakeword_models=[wake_word])
+        self.model = Model(wakeword_models=[wake_word], inference_framework='onnx')
         self.chunk_size = 1280  # 80ms at 16kHz
         self.audit_log = Path('logs/audit.jsonl')
         self.audit_log.parent.mkdir(exist_ok=True)
