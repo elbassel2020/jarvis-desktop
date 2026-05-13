@@ -1,6 +1,6 @@
-"""Jarvis Desktop — Entry point (Phase 1: wake word only)."""
+"""Jarvis Desktop — Phase 2 entry point."""
 from loguru import logger
-from core.wake_listener import WakeListener
+from core.pipeline import JarvisPipeline
 from dotenv import load_dotenv
 import os
 
@@ -11,15 +11,14 @@ logger.add('logs/jarvis_{time}.log', rotation='1 day', retention='7 days')
 
 def main():
     logger.info("=" * 60)
-    logger.info("JARVIS DESKTOP v0.1.0 — Phase 1 Foundation")
+    logger.info("JARVIS DESKTOP v0.2.0 — Phase 2 Voice + Intent")
     logger.info("=" * 60)
 
-    listener = WakeListener(
-        wake_word=os.getenv('WAKE_WORD', 'hey_jarvis'),
-        threshold=float(os.getenv('WAKE_THRESHOLD', '0.5')),
+    pipeline = JarvisPipeline(
+        capture_duration=int(os.getenv('CAPTURE_DURATION', '5')),
+        whisper_model=os.getenv('WHISPER_MODEL', 'small'),
     )
-
-    listener.listen_forever()
+    pipeline.run()
 
 
 if __name__ == '__main__':
