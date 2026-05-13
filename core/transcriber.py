@@ -1,5 +1,8 @@
-"""Whisper-based speech-to-text."""
+"""Whisper-based speech-to-text — FFmpeg-free WAV loading via scipy."""
 import whisper
+import numpy as np
+import scipy.io.wavfile as wav
+from scipy.signal import resample
 from pathlib import Path
 from loguru import logger
 import time
@@ -12,14 +15,26 @@ class Transcriber:
         self.model = whisper.load_model(model_name)
         logger.info(f"Loaded in {time.time() - t0:.1f}s")
 
+    def _load_audio(self, path: Path) -> np.ndarray:
+        """Load WAV via scipy, return float32 mono 16kHz array for Whisper."""
+        sr, audio = wav.read(str(path))
+        if audio.dtype == np.int16:
+            audio = audio.astype(np.float32) / 32768.0
+        elif audio.dtype == np.int32:
+            audio = audio.astype(np.float32) / 2147483648.0
+        else:
+            audio = audio.astype(np.float32)
+        if audio.ndim > 1:
+            audio = audio.mean(axis=1)
+        if sr != 16000:
+            audio = resample(audio, int(len(audio) * 16000 / sr)).astype(np.float32)
+        return audio
+
     def transcribe(self, audio_path: Path, language=None) -> dict:
-        """Transcribe audio file. Returns dict with text, language, duration."""
+        """Transcribe WAV file without FFmpeg. Returns {text, language, duration_s}."""
         t0 = time.time()
-        result = self.model.transcribe(
-            str(audio_path),
-            language=language,  # None = auto-detect (Arabic + English)
-            fp16=False,         # CPU mode
-        )
+        audio = self._load_audio(audio_path)
+        result = self.model.transcribe(audio, language=language, fp16=False)
         elapsed = time.time() - t0
 
         out = {
