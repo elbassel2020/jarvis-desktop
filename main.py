@@ -1,4 +1,4 @@
-"""Jarvis Desktop v0.4.0 — Qwen brain entry point."""
+"""Jarvis Desktop v0.6.0 — Multi-LLM Ensemble + ElevenLabs TTS."""
 from loguru import logger
 from core.pipeline import JarvisPipeline
 from dotenv import load_dotenv
@@ -11,7 +11,7 @@ logger.add('logs/jarvis_{time}.log', rotation='1 day', retention='7 days')
 
 def main():
     logger.info("=" * 60)
-    logger.info("JARVIS DESKTOP v0.4.0 — Qwen Brain")
+    logger.info("JARVIS DESKTOP v0.6.0 — Multi-LLM Ensemble + ElevenLabs")
     logger.info("=" * 60)
 
     pipeline = JarvisPipeline(

@@ -1,4 +1,4 @@
-"""Safe actions — Phase 3 + v0.3.2 polish (pygame TTS, stamped screenshots)."""
+"""Safe actions — v0.6.0 (ElevenLabs TTS primary, edge-tts fallback, stamped screenshots)."""
 from pathlib import Path
 from datetime import datetime
 from loguru import logger
@@ -11,6 +11,11 @@ import os
 import pygame
 
 pygame.mixer.init()
+
+# ElevenLabs config
+# Rachel (21m00Tcm4TlvDq8ikWAM) requires paid plan; Adam works on free tier
+_ELEVEN_VOICE_ID = 'pNInz6obpgDQGcFmaJgB'  # Adam — eleven_multilingual_v2
+_ELEVEN_MODEL = 'eleven_multilingual_v2'
 
 
 class SafeActions:
@@ -33,24 +38,59 @@ class SafeActions:
             'excel': 'excel.exe',
         }
 
-    async def _speak_async(self, text: str, voice='en-US-AriaNeural') -> Path:
+    def _speak_elevenlabs(self, text: str) -> Path:
+        """ElevenLabs TTS → mp3 via streaming API."""
+        from elevenlabs.client import ElevenLabs
+        from elevenlabs import VoiceSettings
+        api_key = os.getenv('ELEVENLABS_API_KEY')
+        client = ElevenLabs(api_key=api_key)
+        timestamp = datetime.now().strftime('%H%M%S')
+        out_path = self.tts_dir / f'speech_{timestamp}.mp3'
+        audio = client.text_to_speech.convert(
+            voice_id=_ELEVEN_VOICE_ID,
+            text=text,
+            model_id=_ELEVEN_MODEL,
+            voice_settings=VoiceSettings(stability=0.5, similarity_boost=0.75),
+        )
+        with open(str(out_path), 'wb') as f:
+            for chunk in audio:
+                f.write(chunk)
+        return out_path
+
+    async def _speak_edge_async(self, text: str, voice='en-US-AriaNeural') -> Path:
         timestamp = datetime.now().strftime('%H%M%S')
         out_path = self.tts_dir / f'speech_{timestamp}.mp3'
         await edge_tts.Communicate(text, voice).save(str(out_path))
         return out_path
 
     def speak(self, text: str, voice='en-US-AriaNeural'):
-        """Synthesize via edge-tts, play blocking via pygame (no media player popup)."""
+        """ElevenLabs primary TTS, edge-tts fallback. Plays blocking via pygame."""
+        eleven_key = os.getenv('ELEVENLABS_API_KEY')
+        out_path = None
+
+        if eleven_key:
+            try:
+                out_path = self._speak_elevenlabs(text)
+                logger.debug("TTS: ElevenLabs")
+            except Exception as e:
+                logger.warning(f"ElevenLabs TTS failed ({e}), falling back to edge-tts")
+
+        if out_path is None:
+            try:
+                out_path = asyncio.run(self._speak_edge_async(text, voice))
+                logger.debug("TTS: edge-tts")
+            except Exception as e:
+                logger.error(f"TTS failed entirely: {e}")
+                return None
+
         try:
-            out_path = asyncio.run(self._speak_async(text, voice))
             pygame.mixer.music.load(str(out_path))
             pygame.mixer.music.play()
             while pygame.mixer.music.get_busy():
                 pygame.time.Clock().tick(10)
-            return out_path
         except Exception as e:
-            logger.error(f"TTS failed: {e}")
-            return None
+            logger.error(f"Pygame playback failed: {e}")
+        return out_path
 
     def speak_sync(self, text: str, voice='en-US-AriaNeural'):
         return self.speak(text, voice)
