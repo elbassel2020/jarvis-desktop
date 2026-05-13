@@ -1,14 +1,16 @@
-"""Safe actions only — Phase 3. No file ops, no system control."""
+"""Safe actions — Phase 3 + v0.3.2 polish (pygame TTS, stamped screenshots)."""
 from pathlib import Path
 from datetime import datetime
 from loguru import logger
 import subprocess
 import webbrowser
 import requests
-from PIL import ImageGrab
 import asyncio
 import edge_tts
 import os
+import pygame
+
+pygame.mixer.init()
 
 
 class SafeActions:
@@ -18,7 +20,6 @@ class SafeActions:
         self.tts_dir = Path('logs/tts')
         self.tts_dir.mkdir(parents=True, exist_ok=True)
 
-        # WHITELIST — only these apps can be launched
         self.allowed_apps = {
             'calculator': 'calc.exe',
             'notepad': 'notepad.exe',
@@ -28,107 +29,121 @@ class SafeActions:
             'cmd': 'cmd.exe',
             'powershell': 'powershell.exe',
             'vscode': 'code.exe',
+            'word': 'winword.exe',
+            'excel': 'excel.exe',
         }
 
-    async def _speak_async(self, text: str, voice='en-US-AriaNeural'):
+    async def _speak_async(self, text: str, voice='en-US-AriaNeural') -> Path:
         timestamp = datetime.now().strftime('%H%M%S')
         out_path = self.tts_dir / f'speech_{timestamp}.mp3'
-        communicate = edge_tts.Communicate(text, voice)
-        await communicate.save(str(out_path))
-        os.startfile(str(out_path))
+        await edge_tts.Communicate(text, voice).save(str(out_path))
         return out_path
 
-    def speak_sync(self, text: str, voice='en-US-AriaNeural'):
-        """Synthesize and play speech via edge-tts."""
+    def speak(self, text: str, voice='en-US-AriaNeural'):
+        """Synthesize via edge-tts, play blocking via pygame (no media player popup)."""
         try:
-            asyncio.run(self._speak_async(text, voice))
+            out_path = asyncio.run(self._speak_async(text, voice))
+            pygame.mixer.music.load(str(out_path))
+            pygame.mixer.music.play()
+            while pygame.mixer.music.get_busy():
+                pygame.time.Clock().tick(10)
+            return out_path
         except Exception as e:
-            logger.warning(f"TTS failed: {e}")
+            logger.error(f"TTS failed: {e}")
+            return None
+
+    def speak_sync(self, text: str, voice='en-US-AriaNeural'):
+        return self.speak(text, voice)
 
     def screenshot(self, transcript=None) -> dict:
-        """Take screenshot of primary screen."""
+        """Take screenshot with timestamp watermark, open it."""
+        from PIL import ImageGrab, ImageDraw, ImageFont
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        readable = datetime.now().strftime('%H:%M:%S')
         path = self.screenshots_dir / f'screenshot_{timestamp}.png'
-        img = ImageGrab.grab()
-        img.save(str(path))
-        logger.success(f"Screenshot: {path}")
-        self.speak_sync("Screenshot saved")
-        return {'action': 'screenshot', 'path': str(path), 'success': True}
+
+        try:
+            img = ImageGrab.grab(all_screens=True)
+        except TypeError:
+            img = ImageGrab.grab()
+
+        draw = ImageDraw.Draw(img)
+        try:
+            font = ImageFont.truetype("arial.ttf", 24)
+        except Exception:
+            font = ImageFont.load_default()
+
+        label = f"Jarvis | {readable}"
+        bbox = draw.textbbox((0, 0), label, font=font)
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        x, y = img.width - w - 20, img.height - h - 20
+        draw.rectangle([x - 10, y - 5, x + w + 10, y + h + 10], fill=(0, 0, 0))
+        draw.text((x, y), label, fill=(255, 255, 255), font=font)
+
+        img.save(str(path), 'PNG', optimize=True)
+        logger.success(f"Screenshot ({img.width}x{img.height}): {path}")
+        os.startfile(str(path))
+        self.speak("Screenshot captured")
+        return {'action': 'screenshot', 'path': str(path), 'size': f'{img.width}x{img.height}', 'success': True}
 
     def time(self, transcript=None) -> dict:
-        """Speak current time."""
         now = datetime.now()
         text = now.strftime("The time is %I:%M %p")
-        logger.info(f"Time: {text}")
-        self.speak_sync(text)
+        self.speak(text)
         return {'action': 'time', 'value': now.isoformat(), 'success': True}
 
     def weather(self, transcript=None, city='Jubail') -> dict:
-        """Get weather via free wttr.in API."""
         try:
             r = requests.get(f'https://wttr.in/{city}?format=3', timeout=5)
             text = r.text.strip()
-            logger.info(f"Weather: {text}")
-            self.speak_sync(text)
+            self.speak(text)
             return {'action': 'weather', 'value': text, 'success': True}
         except Exception as e:
             logger.error(f"Weather failed: {e}")
             return {'action': 'weather', 'error': str(e), 'success': False}
 
     def open_app(self, transcript=None) -> dict:
-        """Open whitelisted app from transcript."""
         if not transcript:
             return {'action': 'open_app', 'error': 'no transcript', 'success': False}
-
         text_lower = transcript.lower()
-        matched_app = None
-        for app_name, exe in self.allowed_apps.items():
-            if app_name in text_lower:
-                matched_app = (app_name, exe)
+        matched = None
+        for name, exe in self.allowed_apps.items():
+            if name in text_lower:
+                matched = (name, exe)
                 break
-
-        if not matched_app:
-            self.speak_sync("App not in whitelist")
+        if not matched:
+            self.speak("App not in whitelist")
             return {'action': 'open_app', 'error': 'not whitelisted', 'success': False}
-
-        app_name, exe = matched_app
+        app, exe = matched
         try:
             subprocess.Popen(exe, shell=True)
-            logger.success(f"Opened: {app_name}")
-            self.speak_sync(f"Opening {app_name}")
-            return {'action': 'open_app', 'app': app_name, 'success': True}
+            self.speak(f"Opening {app}")
+            return {'action': 'open_app', 'app': app, 'success': True}
         except Exception as e:
-            logger.error(f"Open failed: {e}")
             return {'action': 'open_app', 'error': str(e), 'success': False}
 
     def search(self, transcript=None) -> dict:
-        """Open web search in browser."""
         if not transcript:
             return {'action': 'search', 'error': 'no transcript', 'success': False}
         query = transcript.lower()
         for w in ['search for', 'search', 'google', 'find', 'ابحث', 'دور على', 'دور']:
             query = query.replace(w, '').strip()
-        url = f'https://www.google.com/search?q={query.replace(" ", "+")}'
-        webbrowser.open(url)
-        logger.info(f"Search: {query}")
-        self.speak_sync(f"Searching for {query}")
+        webbrowser.open(f'https://www.google.com/search?q={query.replace(" ", "+")}')
+        self.speak(f"Searching for {query}")
         return {'action': 'search', 'query': query, 'success': True}
 
     def cancel(self, transcript=None) -> dict:
-        """Acknowledge cancel."""
-        self.speak_sync("Cancelled")
+        self.speak("Cancelled")
         return {'action': 'cancel', 'success': True}
 
     def system_status(self, transcript=None) -> dict:
-        """Report basic CPU + memory status."""
         import psutil
         text = f"CPU at {psutil.cpu_percent()} percent, memory at {psutil.virtual_memory().percent} percent"
         logger.info(f"Status: {text}")
-        self.speak_sync(text)
+        self.speak(text)
         return {'action': 'system_status', 'value': text, 'success': True}
 
 
-# Intent -> action method name mapping
 ACTION_MAP = {
     'screenshot': 'screenshot',
     'time': 'time',
@@ -141,13 +156,9 @@ ACTION_MAP = {
 
 
 def execute(intent_result: dict, actions: SafeActions = None) -> dict:
-    """Dispatch intent to safe action handler."""
     actions = actions or SafeActions()
     intent = intent_result.get('intent', 'unknown')
     raw = intent_result.get('raw_text', '')
-
     if intent not in ACTION_MAP:
         return {'action': 'unknown', 'success': False, 'reason': f'No handler for {intent}'}
-
-    handler = getattr(actions, ACTION_MAP[intent])
-    return handler(transcript=raw)
+    return getattr(actions, ACTION_MAP[intent])(transcript=raw)
