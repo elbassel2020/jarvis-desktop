@@ -7,13 +7,17 @@ from loguru import logger
 import anthropic
 
 LEARNING_QUERIES = [
-    ('electrical_standards', 'Saudi Arabia IEC electrical standards updates 2025 2026'),
-    ('zatca', 'ZATCA e-invoicing Phase 2 updates penalties 2025 2026'),
-    ('schneider', 'Schneider Electric Saudi Arabia distributor price update 2025'),
-    ('energy_prices', 'Saudi Arabia electricity tariff industrial 2025'),
-    ('procurement', 'B2B procurement electrical contractor Saudi Arabia tips'),
-    ('currency', 'USD SAR exchange rate trend 2025'),
-    ('business_news', 'Jubail industrial city business news contracts 2025'),
+    ('electrical_standards', 'Saudi Arabia IEC electrical standards updates 2026'),
+    ('zatca', 'ZATCA e-invoicing Phase 2 updates penalties 2026'),
+    ('schneider', 'Schneider Electric Saudi Arabia distributor price update 2026'),
+    ('energy_prices', 'Saudi Arabia electricity tariff industrial 2026'),
+    ('procurement', 'B2B procurement electrical contractor Saudi Arabia tips 2026'),
+    ('currency', 'USD SAR exchange rate trend 2026'),
+    ('business_news', 'Jubail industrial city business news contracts 2026'),
+    # Tech / AI updates
+    ('claude_updates', 'Anthropic Claude model releases 2026 API updates new features developers'),
+    ('ai_updates', 'OpenAI GPT new model releases features 2026'),
+    ('ai_tools', 'AI agents voice assistants new tools 2026 GitHub trending open source'),
 ]
 
 BRIEF_PROMPT = """You are Jarvis, personal AI for Walid Al-Bassel (electrical contractor, Jubail KSA).

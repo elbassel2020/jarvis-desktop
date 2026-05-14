@@ -112,6 +112,27 @@ class JarvisPipeline:
         except Exception as e:
             logger.warning(f"Audio watchdog failed to start: {e}")
 
+        # Global STOP hotkey (Ctrl+Alt+S) — works even during TTS
+        try:
+            import keyboard
+
+            def _global_stop():
+                try:
+                    import pygame
+                    pygame.mixer.music.stop()
+                except Exception:
+                    pass
+                self.pending_action = None
+                self.tts_playing = False
+                self.cooldown_until = time.time() + 0.5
+                logger.warning('GLOBAL STOP (hotkey Ctrl+Alt+S)')
+
+            keyboard.add_hotkey('ctrl+alt+s', _global_stop)
+            self.global_stop_hotkey = True
+            logger.info("Hotkey: Ctrl+Alt+S = STOP")
+        except Exception as e:
+            logger.warning(f"Hotkey setup failed: {e}")
+
         # GitHub watch daily at 7 AM
         try:
             def _run_gh_watch():
@@ -135,6 +156,26 @@ class JarvisPipeline:
             logger.info("GitHub watch scheduler started (fires at 07:00)")
         except Exception as e:
             logger.warning(f"GitHub watch failed to start: {e}")
+
+        # Self-diagnostic every 4 hours
+        try:
+            def _run_diagnostics():
+                import time as _time
+                while True:
+                    _time.sleep(4 * 3600)
+                    try:
+                        from core.self_analyze import SelfAnalyzer
+                        SelfAnalyzer().analyze_self()
+                        logger.info('Self-diagnostic run completed')
+                    except Exception as _e:
+                        logger.warning(f'Self-diag failed: {_e}')
+
+            _diag = threading.Thread(target=_run_diagnostics, daemon=True, name='self_diagnostic')
+            _diag.start()
+            self.self_diagnostic_scheduler = _diag
+            logger.info("Self-diagnostic scheduler started (every 4h)")
+        except Exception as e:
+            logger.warning(f"Self-diagnostic init failed: {e}")
 
     def on_wake_detected_safe(self, wake_word, score):
         # Skip detection while TTS is playing (anti-feedback loop)

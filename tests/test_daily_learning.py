@@ -51,7 +51,7 @@ class TestDailyLearnerInit:
 
     def test_learning_queries_count(self):
         from core.daily_learning import LEARNING_QUERIES
-        assert len(LEARNING_QUERIES) == 7
+        assert len(LEARNING_QUERIES) == 10  # v0.11.0: +3 AI/Claude queries
 
     def test_learning_queries_have_category_and_query(self):
         from core.daily_learning import LEARNING_QUERIES
@@ -135,7 +135,7 @@ class TestRun:
         learner._client.messages.create.return_value = _mock_claude_response('Insight text here.')
         learner.run()
         stats = learner.memory.stats()
-        assert stats['insights'] == 7  # all 7 queries succeeded
+        assert stats['insights'] == 10  # all 10 queries succeeded (v0.11.0)
 
     def test_run_saves_morning_brief(self, learner):
         def side_effect(**kwargs):

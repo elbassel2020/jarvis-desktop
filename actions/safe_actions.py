@@ -347,6 +347,26 @@ class SafeActions:
             return {'action': 'analyze_code', 'report': result['report_file'], 'success': True}
         return {'action': 'analyze_code', 'error': 'failed', 'success': False}
 
+    def msma_help(self, transcript=None) -> dict:
+        """Look up MSMA Bot command from semantic memory."""
+        from core.memory import JarvisMemory
+        m = JarvisMemory()
+        cur = m.conn.cursor()
+        text = (transcript or '').lower().replace('/', '')
+        cur.execute("SELECT key, value FROM semantic WHERE category='msma_commands'")
+        all_cmds = cur.fetchall()
+        best_match = None
+        for key, value in all_cmds:
+            cmd_name = key.replace('msma_cmd_', '')
+            if cmd_name in text:
+                best_match = value
+                break
+        if best_match:
+            self.speak(best_match[:200])
+            return {'action': 'msma_help', 'info': best_match, 'success': True}
+        self.speak(f'عندي {len(all_cmds)} command في الـ-MSMA Bot. قول اسم الـ-command')
+        return {'action': 'msma_help', 'count': len(all_cmds), 'success': True}
+
 
 ACTION_MAP = {
     'screenshot': 'screenshot',
@@ -367,6 +387,7 @@ ACTION_MAP = {
     'vision': 'vision',
     'shop': 'shop',
     'analyze_code': 'analyze_code',
+    'msma_help': 'msma_help',
 }
 
 
