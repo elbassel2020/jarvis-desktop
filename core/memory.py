@@ -282,6 +282,39 @@ class JarvisMemory:
         lines = [f"- [{r[0]}] {r[2]}" for r in rows]
         return "RECENT LEARNINGS:\n" + '\n'.join(lines)
 
+    def add_conversation_turn(self, user_text: str, jarvis_response: str):
+        """Store a conversation turn for multi-turn context."""
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT INTO episodic (timestamp, transcript, intent, response, backend, latency_s, confidence, success) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (datetime.now().isoformat(), user_text, 'conversation', jarvis_response, 'memory', 0.0, 1.0, 1)
+        )
+        self.conn.commit()
+
+    def get_recent_turns(self, n: int = 5, minutes: int = 15) -> list:
+        """Get last N conversation turns within last X minutes (chronological)."""
+        from datetime import timedelta
+        cutoff = (datetime.now() - timedelta(minutes=minutes)).isoformat()
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT transcript, response FROM episodic WHERE timestamp >= ? AND intent = 'conversation' "
+            "ORDER BY timestamp DESC LIMIT ?",
+            (cutoff, n)
+        )
+        return list(reversed(cur.fetchall()))
+
+    def get_daily_thread(self) -> list:
+        """Get today's conversation turns."""
+        today = datetime.now().strftime('%Y-%m-%d')
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT transcript, response FROM episodic WHERE timestamp LIKE ? AND intent = 'conversation' "
+            "ORDER BY timestamp",
+            (f'{today}%',)
+        )
+        return cur.fetchall()
+
     def stats(self):
         cur = self.conn.cursor()
         cur.execute("SELECT COUNT(*) FROM episodic")

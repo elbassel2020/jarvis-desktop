@@ -367,6 +367,24 @@ class SafeActions:
         self.speak(f'عندي {len(all_cmds)} command في الـ-MSMA Bot. قول اسم الـ-command')
         return {'action': 'msma_help', 'count': len(all_cmds), 'success': True}
 
+    def my_status(self, transcript=None) -> dict:
+        """Tell Walid his session stats + wellbeing check."""
+        from core.memory import JarvisMemory
+        from datetime import datetime
+        m = JarvisMemory()
+        cur = m.conn.cursor()
+        today = datetime.now().strftime('%Y-%m-%d')
+        today_turns = cur.execute(
+            "SELECT COUNT(*) FROM episodic WHERE timestamp LIKE ? AND intent='conversation'",
+            (f'{today}%',)
+        ).fetchone()[0]
+        insights = cur.execute(
+            "SELECT COUNT(*) FROM daily_insights WHERE date = ?", (today,)
+        ).fetchone()[0]
+        msg = f'النهارده عملنا {today_turns} محادثة و {insights} insight. ايه احوالك يا بابا؟'
+        self.speak(msg)
+        return {'action': 'my_status', 'turns': today_turns, 'insights': insights, 'success': True}
+
 
 ACTION_MAP = {
     'screenshot': 'screenshot',
@@ -388,6 +406,7 @@ ACTION_MAP = {
     'shop': 'shop',
     'analyze_code': 'analyze_code',
     'msma_help': 'msma_help',
+    'my_status': 'my_status',
 }
 
 

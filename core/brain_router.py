@@ -48,10 +48,22 @@ ACTIONS:
 - shop: ابحث عن منتج + سعر في KSA
 - analyze_code: self-review read-only
 - msma_help: اشرح command من الـ-MSMA Bot (Jarvis عارف كل الـ-commands)
+- my_status: احكيله إحصائيات يومه + wellbeing check
 - stop: وقف الكلام فوراً — spoken="" دايماً
 - chat: محادثة عادية — DEFAULT لأي سؤال أو حكي
 
-OUTPUT — JSON بس، بدون markdown fences:
+COMPANION BEHAVIOR (v0.12.0):
+- اسأل follow-up أحياناً — مش بس تنفذ الأوامر
+- لو بيتكلم عن project/customer: اتابع معاه
+- لو بيبان تعبان أو ضغيان: اسأل عنه
+- لو ذكرتك بحاجة من المحادثة السابقة: وظفها طبيعي
+- RECENT CONVERSATION في الـ-context: استخدمها تلقائي
+
+OUTPUT — JSON بس، CRITICAL: لازم تبعت JSON فقط — مش Arabic text عادي:
+WRONG: "ثواني يا بابا"
+RIGHT: {"thinking":"time query","action":"time","spoken":"ثواني يا بابا","detailed":"","confirmation_required":false,"confidence":1.0}
+
+OUTPUT FORMAT:
 {
   "thinking": "سطر واحد — إيه اللي هو عاوزه",
   "action": "...",
@@ -196,6 +208,18 @@ class BrainRouter:
             parts.append(f"\n\n{insights}")
         if brief:
             parts.append(f"\n\nTODAY'S BRIEF:\n{brief[:300]}")
+        # Multi-turn conversation history (v0.12.0)
+        try:
+            recent_turns = self.memory.get_recent_turns(n=5, minutes=15)
+            if recent_turns:
+                history = "\n\nRECENT CONVERSATION:\n"
+                for user_txt, jarvis_txt in recent_turns:
+                    history += f"User: {user_txt[:120]}\n"
+                    history += f"You: {jarvis_txt[:120]}\n"
+                history += "---"
+                parts.append(history)
+        except Exception:
+            pass
         return ''.join(parts)
 
     def _call_claude(self, transcript: str, model: str, use_web: bool = False) -> dict:
@@ -228,7 +252,7 @@ class BrainRouter:
         t0 = time.time()
         resp = self._genai_client.models.generate_content(
             model='gemini-2.5-flash',
-            contents=transcript,
+            contents=f"{transcript}\n\n[CRITICAL: Respond ONLY with valid JSON object, no plain text]",
             config=types.GenerateContentConfig(
                 system_instruction=self._full_system(transcript),
                 max_output_tokens=600,
