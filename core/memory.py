@@ -50,19 +50,74 @@ class JarvisMemory:
 
     def _seed_walid(self):
         facts = {
-            'name': 'Walid Al-Bassel (والد البصل)',
-            'business': 'MSMA Group — B2B electrical contractor, solo',
-            'location': 'Jubail, Saudi Arabia',
-            'languages': 'Arabic (Egyptian) + English mixed',
-            'work_capacity': '60 hours/month',
-            'primary_customer': 'Zamilfood (cash, PRIMARY focus)',
-            'secondary_customer': 'SMI (deferred payment, high RFQ volume)',
-            'other_customers': 'Olayan Descon (Fardeen), BHIG, Taj Construction',
-            'msma_bot': 'Running 24/7 as Windows service at C:\\\\Users\\\\walid\\\\Documents\\\\MSMA',
-            'communication_style': 'Direct, practical, hates fluff',
-            'preferred_brands': 'Schneider > ABB > Siemens',
-            'compliance_concern': 'ZATCA Phase 2 June 30 2026',
-            'jarvis_purpose': 'Personal AI companion + voice interface + future MSMA bridge',
+            # --- Identity ---
+            'name': 'Walid Al-Bassel (والد البصل) — يفضل "يا بابا" أو "يا فالح"',
+            'business': 'MSMA Group — B2B electrical contractor, solo operator',
+            'location': 'Jubail, Saudi Arabia (المنطقة الشرقية)',
+            'nationality': 'Egyptian living in Saudi Arabia — مصري في جبيل',
+            'languages': 'Arabic Egyptian dialect + English — يخلطهم بشكل طبيعي',
+            'age_range': 'Mid-career professional, experienced engineer',
+
+            # --- Business Operations ---
+            'work_capacity': '60 hours/month billable — solo so time is critical',
+            'business_model': 'B2B only — no retail, no end users, only industrial clients',
+            'specialization': 'MV/LV electrical panels, switchgear, power distribution',
+            'quote_process': 'RFQ → supplier quotes → margin → proposal — solo workflow',
+            'payment_preference': 'Cash clients first — deferred payment strains cash flow',
+            'invoicing': 'ZATCA Phase 2 compliant e-invoicing required by June 30 2026',
+
+            # --- Customers ---
+            'primary_customer': 'Zamilfood — cash payment, fast decisions, priority 1',
+            'secondary_customer': 'SMI — high RFQ volume but deferred payment',
+            'customer_olayan': 'Olayan Descon — contact: Fardeen, good relationship',
+            'customer_bhig': 'BHIG — active customer',
+            'customer_taj': 'Taj Construction — active customer',
+            'customer_priority': 'Zamilfood > Olayan > BHIG = Taj > SMI (by cash priority)',
+
+            # --- Preferred Brands & Suppliers ---
+            'preferred_brands': 'Schneider Electric > ABB > Siemens for panels',
+            'schneider_use': 'MV/LV switchgear, automation, easiest KSA sourcing',
+            'abb_use': 'Drives, motors, heavy industrial — secondary choice',
+            'siemens_use': 'Backup option, less common in his supply chain',
+            'supplier_strategy': 'Source locally in KSA first, import if unavoidable',
+
+            # --- MSMA Bot System ---
+            'msma_bot': 'MSMA bot runs 24/7 as Windows service at C:\\\\Users\\\\walid\\\\Documents\\\\MSMA',
+            'msma_bot_function': 'Monitors emails, extracts RFQs, auto-responds, generates quotes',
+            'msma_bot_stack': 'Python FastAPI, SQLite, Claude API, Gmail IMAP/SMTP',
+            'msma_bot_status': 'Operational — Jarvis future bridge planned via localhost:9000',
+            'msma_email_rule': 'Customer emails must NEVER mention AI/bot/automated — appear personal from Walid',
+
+            # --- Jarvis System ---
+            'jarvis_purpose': 'Personal AI companion, voice assistant, MSMA bridge — يارفيس مش أداة، صاحب',
+            'jarvis_voice': 'Brian (ElevenLabs) — warm, friendly — Walid chose it',
+            'jarvis_wake_word': 'hey_jarvis',
+            'jarvis_llm_routing': 'Gemini (simple) → Claude Sonnet (medium) → Claude Opus+web (complex) → Qwen fallback',
+            'jarvis_stt': 'Groq Whisper-Large-v3-Turbo — sub-second Arabic + English',
+
+            # --- Communication Style ---
+            'communication_style': 'Direct, practical, hates fluff and filler words',
+            'preferred_response_length': 'Short answers — 20 words max for spoken, detail only if asked',
+            'honesty_expectation': 'Correct him when wrong — do NOT agree just to please him',
+            'emotional_support': 'When tired/stressed: ريّح يا بابا — validate then move on',
+            'humor': 'Light Egyptian humor OK — يا فالح, يا باشا — context-sensitive',
+
+            # --- Compliance & Finance ---
+            'compliance_concern': 'ZATCA Phase 2 e-invoicing — deadline June 30 2026',
+            'tax_regime': 'VAT registered Saudi Arabia — 15% VAT on B2B services',
+            'financial_sensitivity': 'Cash flow critical — solo operator, no buffer team',
+
+            # --- Technical Expertise ---
+            'engineering_background': 'Electrical engineer — MV/LV systems, IEC standards, KSA SASO norms',
+            'standards_knowledge': 'IEC 60364, IEC 61439, Saudi SASO equivalents',
+            'site_experience': 'Industrial sites: food processing, petrochemical support, general industry',
+            'software_comfort': 'Windows power user, Python-aware, comfortable with APIs',
+
+            # --- Personal Preferences ---
+            'working_hours': 'Early morning focus — uses Jarvis 6-8 AM primarily',
+            'pc_setup': 'Windows 11, VSCode, Python env, always-on MSMA service',
+            'browser_default': 'Chrome — edge as fallback',
+            'music_taste': 'Occasionally plays music during work — can stop with voice',
         }
         cur = self.conn.cursor()
         for k, v in facts.items():

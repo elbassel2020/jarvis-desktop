@@ -79,10 +79,12 @@ class TestParseResult:
         result = _parse_result(raw)
         assert result['action'] == 'screenshot'
 
-    def test_invalid_json_raises(self):
+    def test_invalid_json_returns_fallback(self):
         from core.brain_router import _parse_result
-        with pytest.raises(Exception):
-            _parse_result('this is not json at all')
+        # v0.9.0: invalid JSON returns fallback dict instead of raising
+        result = _parse_result('this is not json at all')
+        assert result['action'] == 'chat'
+        assert result['confidence'] == 0.3
 
 
 # ── _build_result ─────────────────────────────────────────────────────────

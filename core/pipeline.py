@@ -29,6 +29,7 @@ class JarvisPipeline:
         self.processing_lock = threading.Lock()
         self.cooldown_until = 0.0
         self.pending_action = None  # waiting for confirmation
+        self.tts_playing = False    # mute wake listener during TTS playback
 
         self.listener = WakeListener(
             wake_word=wake_word,
@@ -86,7 +87,35 @@ class JarvisPipeline:
         except Exception as e:
             logger.warning(f"Learning scheduler failed: {e}")
 
+        # Audio stream watchdog — auto-restart sounddevice on crash
+        try:
+            def _run_watchdog():
+                import time as _time
+                while True:
+                    _time.sleep(60)
+                    try:
+                        import sounddevice as sd
+                        sd.query_devices()  # health check
+                    except Exception as _e:
+                        logger.error(f'Audio watchdog: stream dead ({_e}), attempting recovery')
+                        try:
+                            sd._terminate()
+                            sd._initialize()
+                            logger.info('Audio stream recovered')
+                        except Exception as _re:
+                            logger.warning(f'Audio recovery failed: {_re}')
+
+            _wd = threading.Thread(target=_run_watchdog, daemon=True, name='audio_watchdog')
+            _wd.start()
+            self.audio_watchdog = _wd
+            logger.info("Audio watchdog started (60s interval)")
+        except Exception as e:
+            logger.warning(f"Audio watchdog failed to start: {e}")
+
     def on_wake_detected_safe(self, wake_word, score):
+        # Skip detection while TTS is playing (anti-feedback loop)
+        if self.tts_playing:
+            return
         now = time.time()
         if now < self.cooldown_until:
             return
@@ -120,8 +149,33 @@ class JarvisPipeline:
                     self.actions.speak('I had a pending action. Say yes or no first.')
                     return
 
+            # Fast-path: detect stop words before LLM call
+            text_lower = transcript.get('text', '').lower()
+            if any(w in text_lower for w in ['stop', 'خلاص', 'اسكت', 'كفاية', 'بس كده']):
+                try:
+                    import pygame
+                    pygame.mixer.music.stop()
+                except Exception:
+                    pass
+                self.pending_action = None
+                self.cooldown_until = time.time() + 1.0
+                logger.info('🛑 STOP word detected — interrupted')
+                return
+
             # LLM brain decides action + response
             decision = self.brain.think(transcript['text'])
+
+            # Stop action from LLM
+            if decision.get('action') == 'stop':
+                try:
+                    import pygame
+                    pygame.mixer.music.stop()
+                except Exception:
+                    pass
+                self.pending_action = None
+                self.cooldown_until = time.time() + 1.0
+                logger.info('🛑 STOP action from LLM')
+                return
 
             # Gate destructive actions behind confirmation
             if decision.get('confirmation_required', False) and decision['action'] not in ('chat', 'cancel'):
@@ -130,12 +184,15 @@ class JarvisPipeline:
                     'confidence': decision.get('confidence', 0.5),
                     'raw_text': decision.get('params') or transcript.get('text', ''),
                 }
-                self.actions.speak(decision.get('spoken') or 'Confirm?')
+                spoken = decision.get('spoken') or 'Confirm?'
+                self.tts_playing = True
+                self.actions.speak(spoken)
+                self.tts_playing = False
                 logger.warning(f"  ⏸ PENDING: {decision['action']} — awaiting confirmation")
                 return
 
             execution = None
-            if self.execute_enabled and decision['action'] not in ('chat', 'cancel'):
+            if self.execute_enabled and decision['action'] not in ('chat', 'cancel', 'stop'):
                 if decision['confidence'] >= 0.3:
                     logger.warning(f"EXECUTING: {decision['action']}")
                     self.cooldown_until = time.time() + 8.0
@@ -147,10 +204,14 @@ class JarvisPipeline:
                     execution = execute_action(intent_dict, self.actions)
                     self.cooldown_until = time.time() + 2.0
                 else:
-                    self.actions.speak("Sorry, I am not sure what you meant")
+                    self.tts_playing = True
+                    self.actions.speak('مش فاهم يا بابا، ممكن تعيد؟')
+                    self.tts_playing = False
             elif decision['action'] == 'chat' and (decision.get('spoken') or decision.get('response')):
                 self.cooldown_until = time.time() + 5.0
+                self.tts_playing = True
                 self.actions.speak(decision.get('spoken') or decision.get('response', ''))
+                self.tts_playing = False
 
             try:
                 self.memory.log_episode(
