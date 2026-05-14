@@ -202,11 +202,52 @@ class SafeActions:
         return {'action': 'system_status', 'value': text, 'success': True}
 
 
+    def close_app(self, transcript=None) -> dict:
+        if not transcript:
+            return {'action': 'close_app', 'error': 'no transcript', 'success': False}
+        text_lower = transcript.lower()
+        process_map = {
+            'chrome': 'chrome.exe',
+            'edge': 'msedge.exe',
+            'notepad': 'notepad.exe',
+            'calculator': 'CalculatorApp.exe', 'calc': 'CalculatorApp.exe',
+            'word': 'WINWORD.EXE',
+            'excel': 'EXCEL.EXE',
+            'outlook': 'OUTLOOK.EXE',
+            'paint': 'mspaint.exe',
+            'photos': 'Microsoft.Photos.exe',
+            'calendar': 'HxOutlook.exe',
+            'mail': 'HxOutlook.exe',
+            'snipping': 'SnippingTool.exe',
+            'taskmgr': 'Taskmgr.exe',
+            'vscode': 'Code.exe', 'code': 'Code.exe',
+            'explorer': 'explorer.exe',
+            'terminal': 'WindowsTerminal.exe',
+        }
+        target = None
+        for name, exe in process_map.items():
+            if name in text_lower:
+                target = (name, exe)
+                break
+        if not target:
+            self.speak("I don't know which app to close")
+            return {'action': 'close_app', 'error': 'no match', 'success': False}
+        name, exe = target
+        try:
+            import subprocess
+            subprocess.run(['taskkill', '/F', '/IM', exe], capture_output=True)
+            self.speak(f"Closed {name}")
+            return {'action': 'close_app', 'app': name, 'success': True}
+        except Exception as e:
+            return {'action': 'close_app', 'error': str(e), 'success': False}
+
+
 ACTION_MAP = {
     'screenshot': 'screenshot',
     'time': 'time',
     'weather': 'weather',
     'open_app': 'open_app',
+    'close_app': 'close_app',
     'search': 'search',
     'cancel': 'cancel',
     'system_status': 'system_status',
