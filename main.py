@@ -1,4 +1,5 @@
-"""Jarvis Desktop v0.6.0 — Multi-LLM Ensemble + ElevenLabs TTS."""
+"""Jarvis Desktop v0.7.2 — Daily Driver."""
+import sys
 from loguru import logger
 from core.pipeline import JarvisPipeline
 from dotenv import load_dotenv
@@ -6,12 +7,16 @@ import os
 
 load_dotenv('config/.env')
 
+# Always log to file; add stderr only in interactive terminal
 logger.add('logs/jarvis_{time}.log', rotation='1 day', retention='7 days')
+if not sys.stdout.isatty():
+    # Running headless (VBS auto-start) — stderr goes nowhere, silence it
+    logger.remove(0)
 
 
 def main():
     logger.info("=" * 60)
-    logger.info("JARVIS DESKTOP v0.6.0 — Multi-LLM Ensemble + ElevenLabs")
+    logger.info("JARVIS DESKTOP v0.7.2 — Daily Driver")
     logger.info("=" * 60)
 
     pipeline = JarvisPipeline(

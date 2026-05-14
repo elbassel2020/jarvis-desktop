@@ -28,6 +28,7 @@ class JarvisPipeline:
 
         self.processing_lock = threading.Lock()
         self.cooldown_until = 0.0
+        self.pending_action = None  # waiting for confirmation
 
         self.listener = WakeListener(
             wake_word=wake_word,
@@ -79,8 +80,35 @@ class JarvisPipeline:
             audio_path = self.capture.capture()
             transcript = self.transcriber.transcribe(audio_path)
 
+            # Handle pending confirmation BEFORE calling LLM
+            if self.pending_action is not None:
+                text_lower = transcript.get('text', '').lower()
+                if any(w in text_lower for w in ['yes', 'تمام', 'ايوة', 'اوكي', 'ok', 'confirm', 'go', 'yep', 'sure']):
+                    logger.warning(f"  ✓ CONFIRMED: {self.pending_action['intent']}")
+                    execution = execute_action(self.pending_action, self.actions)
+                    self.pending_action = None
+                    return
+                elif any(w in text_lower for w in ['no', 'لا', 'cancel', 'الغاء', 'stop', 'nope']):
+                    self.actions.speak('Cancelled')
+                    self.pending_action = None
+                    return
+                else:
+                    self.actions.speak('I had a pending action. Say yes or no first.')
+                    return
+
             # LLM brain decides action + response
             decision = self.brain.think(transcript['text'])
+
+            # Gate destructive actions behind confirmation
+            if decision.get('confirmation_required', False) and decision['action'] not in ('chat', 'cancel'):
+                self.pending_action = {
+                    'intent': decision['action'],
+                    'confidence': decision.get('confidence', 0.5),
+                    'raw_text': decision.get('params') or transcript.get('text', ''),
+                }
+                self.actions.speak(decision.get('spoken') or 'Confirm?')
+                logger.warning(f"  ⏸ PENDING: {decision['action']} — awaiting confirmation")
+                return
 
             execution = None
             if self.execute_enabled and decision['action'] not in ('chat', 'cancel'):
