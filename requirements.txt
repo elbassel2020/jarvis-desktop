@@ -6,7 +6,6 @@ google-genai==2.2.0
 loguru==0.7.3
 numpy==2.4.4
 ollama==0.6.2
-openai-whisper==20250625
 openwakeword==0.6.0
 pillow==12.2.0
 psutil==7.2.2
@@ -15,3 +14,5 @@ python-dotenv==1.2.2
 requests==2.34.0
 scipy==1.17.1
 sounddevice==0.5.5
+
+faster-whisper>=1.0.0
