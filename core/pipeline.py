@@ -112,6 +112,30 @@ class JarvisPipeline:
         except Exception as e:
             logger.warning(f"Audio watchdog failed to start: {e}")
 
+        # GitHub watch daily at 7 AM
+        try:
+            def _run_gh_watch():
+                import time as _time
+                import datetime as _dt
+                while True:
+                    now = _dt.datetime.now()
+                    target = now.replace(hour=7, minute=0, second=0, microsecond=0)
+                    if target <= now:
+                        target += _dt.timedelta(days=1)
+                    _time.sleep((target - now).total_seconds())
+                    try:
+                        from core.github_watch import GitHubWatcher
+                        GitHubWatcher().scan()
+                    except Exception as _e:
+                        logger.debug(f"GitHub watch: {_e}")
+
+            _gh = threading.Thread(target=_run_gh_watch, daemon=True, name='github_watch')
+            _gh.start()
+            self.github_scheduler = _gh
+            logger.info("GitHub watch scheduler started (fires at 07:00)")
+        except Exception as e:
+            logger.warning(f"GitHub watch failed to start: {e}")
+
     def on_wake_detected_safe(self, wake_word, score):
         # Skip detection while TTS is playing (anti-feedback loop)
         if self.tts_playing:

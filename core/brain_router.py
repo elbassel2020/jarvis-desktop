@@ -42,6 +42,9 @@ ACTIONS:
 - lock_screen, sleep_pc (DESTRUCTIVE — لازم تأكيد)
 - search (web)
 - morning_brief: اقرأ الـ-brief اليومي من الـ-AI
+- vision: حلل صورة (clipboard / recent screenshot / file)
+- shop: ابحث عن منتج + سعر في KSA
+- analyze_code: self-review read-only
 - stop: وقف الكلام فوراً — spoken="" دايماً
 - chat: محادثة عادية — DEFAULT لأي سؤال أو حكي
 
@@ -260,6 +263,31 @@ class BrainRouter:
             f"[{elapsed:.1f}s Qwen] {result['action']} conf={result['confidence']:.2f}"
         )
         return result
+
+    def think_ensemble(self, transcript: str) -> dict:
+        """For critical queries: run Claude + Gemini in parallel, pick best by confidence."""
+        import concurrent.futures
+        results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+            futures = []
+            if self._claude:
+                futures.append(ex.submit(self._call_claude, transcript, 'claude-sonnet-4-6'))
+            if self._genai:
+                futures.append(ex.submit(self._call_gemini, transcript))
+            for f in futures:
+                try:
+                    results.append(f.result(timeout=15))
+                except Exception as e:
+                    logger.warning(f"Ensemble member failed: {e}")
+        if not results:
+            return self.think(transcript)
+        best = max(results, key=lambda r: r.get('confidence', 0))
+        best['ensemble_members'] = [r.get('backend') for r in results]
+        logger.success(
+            f"Ensemble: {len(results)} ran, picked {best.get('backend')} "
+            f"conf={best.get('confidence', 0):.2f}"
+        )
+        return best
 
     def think(self, transcript: str) -> dict:
         if not transcript or not transcript.strip():
