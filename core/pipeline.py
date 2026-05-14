@@ -34,7 +34,32 @@ class JarvisPipeline:
             threshold=wake_threshold,
             on_detect=self.on_wake_detected_safe,
         )
-        logger.info(f"v0.4.0 Pipeline: STT={whisper_model} Brain={llm_model} Exec={self.execute_enabled}")
+        logger.info(f"v0.7.1 Pipeline: STT={whisper_model} Brain={llm_model} Exec={self.execute_enabled}")
+
+        # Midnight reflection — daemon thread, runs at 00:05 daily
+        try:
+            import datetime as _dt
+
+            def _run_reflection_loop():
+                import time as _time
+                while True:
+                    now = _dt.datetime.now()
+                    next_run = (now + _dt.timedelta(days=1)).replace(
+                        hour=0, minute=5, second=0, microsecond=0
+                    )
+                    _time.sleep((next_run - now).total_seconds())
+                    try:
+                        from core.reflection import Reflector
+                        Reflector().reflect_on_today()
+                    except Exception as _e:
+                        logger.debug(f"Reflection loop: {_e}")
+
+            _t = threading.Thread(target=_run_reflection_loop, daemon=True, name='reflection')
+            _t.start()
+            self.reflection_thread = _t
+            logger.info("Midnight reflection scheduler started")
+        except Exception as e:
+            logger.warning(f"Reflection scheduler failed: {e}")
 
     def on_wake_detected_safe(self, wake_word, score):
         now = time.time()
@@ -71,9 +96,9 @@ class JarvisPipeline:
                     self.cooldown_until = time.time() + 2.0
                 else:
                     self.actions.speak("Sorry, I am not sure what you meant")
-            elif decision['action'] == 'chat' and decision.get('response'):
+            elif decision['action'] == 'chat' and (decision.get('spoken') or decision.get('response')):
                 self.cooldown_until = time.time() + 5.0
-                self.actions.speak(decision['response'])
+                self.actions.speak(decision.get('spoken') or decision.get('response', ''))
 
             try:
                 self.memory.log_episode(
