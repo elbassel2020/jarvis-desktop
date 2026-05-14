@@ -242,12 +242,56 @@ class SafeActions:
             return {'action': 'close_app', 'error': str(e), 'success': False}
 
 
+    def volume_up(self, transcript=None) -> dict:
+        # Single PowerShell process, 5 volume-up keypresses
+        subprocess.run(
+            ['powershell', '-Command',
+             '$sh=New-Object -ComObject WScript.Shell; 1..5|%{$sh.SendKeys([char]175)}'],
+            capture_output=True
+        )
+        self.speak('Volume up')
+        return {'action': 'volume_up', 'success': True}
+
+    def volume_down(self, transcript=None) -> dict:
+        subprocess.run(
+            ['powershell', '-Command',
+             '$sh=New-Object -ComObject WScript.Shell; 1..5|%{$sh.SendKeys([char]174)}'],
+            capture_output=True
+        )
+        self.speak('Volume down')
+        return {'action': 'volume_down', 'success': True}
+
+    def mute(self, transcript=None) -> dict:
+        subprocess.run(
+            ['powershell', '-Command',
+             '(New-Object -ComObject WScript.Shell).SendKeys([char]173)'],
+            capture_output=True
+        )
+        self.speak('Muted')
+        return {'action': 'mute', 'success': True}
+
+    def lock_screen(self, transcript=None) -> dict:
+        self.speak('Locking now')
+        subprocess.run(['rundll32.exe', 'user32.dll,LockWorkStation'])
+        return {'action': 'lock_screen', 'success': True}
+
+    def sleep_pc(self, transcript=None) -> dict:
+        self.speak('Going to sleep')
+        subprocess.run(['rundll32.exe', 'powrprof.dll,SetSuspendState', '0,1,0'])
+        return {'action': 'sleep_pc', 'success': True}
+
+
 ACTION_MAP = {
     'screenshot': 'screenshot',
     'time': 'time',
     'weather': 'weather',
     'open_app': 'open_app',
     'close_app': 'close_app',
+    'volume_up': 'volume_up',
+    'volume_down': 'volume_down',
+    'mute': 'mute',
+    'lock_screen': 'lock_screen',
+    'sleep_pc': 'sleep_pc',
     'search': 'search',
     'cancel': 'cancel',
     'system_status': 'system_status',
