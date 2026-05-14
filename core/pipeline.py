@@ -3,6 +3,7 @@ from core.wake_listener import WakeListener
 from core.voice_capture import VoiceCapture
 from core.transcriber import Transcriber
 from core.llm_brain import LLMBrain
+from core.memory import JarvisMemory
 from actions.safe_actions import SafeActions, execute as execute_action
 from loguru import logger
 from pathlib import Path
@@ -18,6 +19,7 @@ class JarvisPipeline:
                  wake_word='hey_jarvis', wake_threshold=0.45, llm_model='qwen2.5:7b'):
         self.capture = VoiceCapture(duration=capture_duration)
         self.transcriber = Transcriber(model_name=whisper_model)
+        self.memory = JarvisMemory()
         self.brain = LLMBrain(model=llm_model)
         self.actions = SafeActions()
         self.execute_enabled = os.getenv('ENABLE_ACTIONS', 'false').lower() == 'true'
@@ -72,6 +74,19 @@ class JarvisPipeline:
             elif decision['action'] == 'chat' and decision.get('response'):
                 self.cooldown_until = time.time() + 5.0
                 self.actions.speak(decision['response'])
+
+            try:
+                self.memory.log_episode(
+                    transcript=transcript.get('text', ''),
+                    intent=decision.get('action', 'unknown'),
+                    response=decision.get('response', ''),
+                    backend=decision.get('backend', 'unknown'),
+                    latency=decision.get('duration_s', 0),
+                    confidence=decision.get('confidence', 0),
+                    success=execution.get('success', False) if execution else True,
+                )
+            except Exception as _e:
+                logger.debug(f"Memory log: {_e}")
 
             entry = {
                 'timestamp': datetime.now().isoformat(),
