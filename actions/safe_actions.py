@@ -13,9 +13,9 @@ import pygame
 pygame.mixer.init()
 
 # ElevenLabs config
-# Rachel (21m00Tcm4TlvDq8ikWAM) requires paid plan; Adam works on free tier
-_ELEVEN_VOICE_ID = 'pNInz6obpgDQGcFmaJgB'  # Adam — eleven_multilingual_v2
-_ELEVEN_MODEL = 'eleven_multilingual_v2'
+# Brian (nPczCjzI2devNBz1zQrb) — warm, friendly; Turbo model = faster
+_ELEVEN_VOICE_ID = 'nPczCjzI2devNBz1zQrb'  # Brian — warm friendly voice
+_ELEVEN_MODEL = 'eleven_turbo_v2_5'
 
 
 class SafeActions:
@@ -170,6 +170,11 @@ class SafeActions:
                 os.startfile(exe)
             else:
                 subprocess.Popen(exe, shell=True)
+            try:
+                from core.memory import JarvisMemory
+                JarvisMemory().log_app_open(app)
+            except Exception:
+                pass
             self.speak(f"Opening {app}")
             return {'action': 'open_app', 'app': app, 'success': True}
         except Exception as e:
