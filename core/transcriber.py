@@ -1,46 +1,41 @@
-"""Local Whisper — large-v3 for best accuracy, no API dependency."""
-import whisper
-import time
-import numpy as np
-import scipy.io.wavfile as wav
+"""faster-whisper transcriber — CTranslate2 optimized, 5x faster on CPU."""
+from faster_whisper import WhisperModel
 from pathlib import Path
+import time
 from loguru import logger
 
-
 class Transcriber:
-    def __init__(self, model_name='large-v3', fallback_local=False):
-        logger.info(f"Loading Whisper {model_name}...")
+    def __init__(self, model_name='medium', fallback_local=False):
+        logger.info(f"Loading faster-whisper {model_name} (CPU int8)...")
         t0 = time.time()
-        self.model = whisper.load_model(model_name)
+        # CPU-optimized config: int8 quantization + threading
+        self.model = WhisperModel(
+            model_name,
+            device='cpu',
+            compute_type='int8',
+            num_workers=4,
+            cpu_threads=4
+        )
         self.model_name = model_name
-        logger.info(f"Whisper {model_name} loaded in {time.time() - t0:.1f}s")
+        logger.info(f"faster-whisper {model_name} loaded in {time.time()-t0:.1f}s")
 
-    def _load_audio(self, path: Path) -> np.ndarray:
-        """Load WAV via scipy, return float32 mono 16kHz for Whisper."""
-        sr, audio = wav.read(str(path))
-        if audio.dtype == np.int16:
-            audio = audio.astype(np.float32) / 32768.0
-        else:
-            audio = audio.astype(np.float32)
-        if audio.ndim > 1:
-            audio = audio.mean(axis=1)
-        if sr != 16000:
-            from scipy.signal import resample
-            audio = resample(audio, int(len(audio) * 16000 / sr)).astype(np.float32)
-        return audio
-
-    def transcribe(self, audio_path: Path, language=None) -> dict:
-        """Transcribe WAV without FFmpeg. Returns {text, language, duration_s, backend}."""
+    def transcribe(self, audio_path, language='en'):
         t0 = time.time()
-        audio = self._load_audio(audio_path)
-        result = self.model.transcribe(audio, language=language, fp16=False)
+        segments, info = self.model.transcribe(
+            str(audio_path),
+            language=language,
+            beam_size=5,
+            vad_filter=True,  # voice activity detection
+            vad_parameters=dict(min_silence_duration_ms=500)
+        )
+        text = ''.join(seg.text for seg in segments).strip()
         elapsed = time.time() - t0
         out = {
-            'text': result['text'].strip(),
-            'language': result['language'],
+            'text': text,
+            'language': info.language,
             'duration_s': elapsed,
             'audio_file': str(audio_path),
-            'backend': f'whisper-{self.model_name}-local',
+            'backend': f'faster-whisper-{self.model_name}',
         }
-        logger.success(f"[{elapsed:.1f}s] '{out['text']}' ({out['language']})")
+        logger.success(f"[{elapsed:.1f}s] '{text}' ({info.language})")
         return out
