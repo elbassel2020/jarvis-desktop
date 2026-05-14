@@ -30,6 +30,10 @@ class JarvisPipeline:
         self.cooldown_until = 0.0
         self.pending_action = None  # waiting for confirmation
         self.tts_playing = False    # mute wake listener during TTS playback
+        self.follow_up_mode = False  # v0.12.0: listen without wake word after response
+        self.follow_up_until = 0.0
+        self.last_activity = time.time()
+        self.session_start = time.time()
 
         self.listener = WakeListener(
             wake_word=wake_word,
@@ -177,6 +181,49 @@ class JarvisPipeline:
         except Exception as e:
             logger.warning(f"Self-diagnostic init failed: {e}")
 
+        # Proactive check-in + wellbeing monitor (v0.12.0)
+        try:
+            import random as _random
+
+            def _run_proactive():
+                import time as _time
+                CHECK_INS = [
+                    'بابا، كله تمام؟ مر وقت بدون كلام',
+                    'يا فالح، عاوز حاجة؟ أنا هنا',
+                    'صح يا باشا، كل شيء OK؟',
+                ]
+                BREAK_REMINDERS = [
+                    'بابا، وقت طويل على الـ-PC. خد ريحة',
+                    'يا فالح، عيونك محتاجة راحة. 10 دقايق',
+                ]
+                while True:
+                    _time.sleep(30 * 60)  # check every 30 min
+                    try:
+                        idle_min = (_time.time() - self.last_activity) / 60
+                        if idle_min > 60:
+                            msg = _random.choice(CHECK_INS)
+                            logger.info(f'Proactive check-in ({idle_min:.0f}min idle)')
+                            self.tts_playing = True
+                            self.actions.speak(msg)
+                            self.tts_playing = False
+                            self.last_activity = _time.time()
+                        # Wellbeing: session > 6h
+                        hours = (_time.time() - self.session_start) / 3600
+                        if hours > 6 and _random.random() < 0.3:
+                            msg = _random.choice(BREAK_REMINDERS)
+                            self.tts_playing = True
+                            self.actions.speak(msg)
+                            self.tts_playing = False
+                    except Exception as _e:
+                        logger.debug(f'Proactive: {_e}')
+
+            _pro = threading.Thread(target=_run_proactive, daemon=True, name='proactive')
+            _pro.start()
+            self.proactive_scheduler = _pro
+            logger.info("Proactive check-in scheduler started (30min intervals, idle>60min)")
+        except Exception as e:
+            logger.warning(f"Proactive scheduler failed: {e}")
+
     def on_wake_detected_safe(self, wake_word, score):
         # Skip detection while TTS is playing (anti-feedback loop)
         if self.tts_playing:
@@ -184,6 +231,12 @@ class JarvisPipeline:
         now = time.time()
         if now < self.cooldown_until:
             return
+        # v0.12.0: follow-up mode — treat any audio as trigger within window
+        if self.follow_up_mode and now < self.follow_up_until:
+            self.follow_up_mode = False
+            # re-use wake path but treat as follow-up (score=1.0)
+        elif self.follow_up_mode and now >= self.follow_up_until:
+            self.follow_up_mode = False
         if not self.processing_lock.acquire(blocking=False):
             return
         try:
@@ -193,6 +246,8 @@ class JarvisPipeline:
             self.cooldown_until = time.time() + 2.0
 
     def on_wake_detected(self, wake_word, score):
+        self.last_activity = time.time()
+        self.follow_up_mode = False  # reset on explicit wake
         logger.warning(f"WAKE [{score:.2f}] — recording...")
         try:
             audio_path = self.capture.capture()
@@ -274,9 +329,18 @@ class JarvisPipeline:
                     self.tts_playing = False
             elif decision['action'] == 'chat' and (decision.get('spoken') or decision.get('response')):
                 self.cooldown_until = time.time() + 5.0
+                spoken = decision.get('spoken') or decision.get('response', '')
                 self.tts_playing = True
-                self.actions.speak(decision.get('spoken') or decision.get('response', ''))
+                self.actions.speak(spoken)
                 self.tts_playing = False
+                # v0.12.0: store conversation turn + open follow-up window
+                try:
+                    self.memory.add_conversation_turn(transcript.get('text', ''), spoken)
+                except Exception:
+                    pass
+                self.follow_up_until = time.time() + 15.0
+                self.follow_up_mode = True
+                logger.debug("Follow-up window open (15s)")
 
             try:
                 self.memory.log_episode(
