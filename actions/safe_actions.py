@@ -26,16 +26,26 @@ class SafeActions:
         self.tts_dir.mkdir(parents=True, exist_ok=True)
 
         self.allowed_apps = {
-            'calculator': 'calc.exe',
+            'calculator': 'calc.exe', 'calc': 'calc.exe',
             'notepad': 'notepad.exe',
             'chrome': 'chrome.exe',
             'edge': 'msedge.exe',
-            'explorer': 'explorer.exe',
+            'explorer': 'explorer.exe', 'files': 'explorer.exe',
             'cmd': 'cmd.exe',
+            'terminal': 'wt.exe',
             'powershell': 'powershell.exe',
-            'vscode': 'code.exe',
+            'vscode': 'code.exe', 'code': 'code.exe',
             'word': 'winword.exe',
             'excel': 'excel.exe',
+            'outlook': 'outlook.exe',
+            'paint': 'mspaint.exe',
+            'taskmgr': 'taskmgr.exe',
+            'settings': 'ms-settings:',
+            'calendar': 'outlookcal:',
+            'mail': 'outlookmail:',
+            'photos': 'ms-photos:',
+            'store': 'ms-windows-store:',
+            'snipping': 'snippingtool.exe',
         }
 
     def _speak_elevenlabs(self, text: str) -> Path:
@@ -156,7 +166,10 @@ class SafeActions:
             return {'action': 'open_app', 'error': 'not whitelisted', 'success': False}
         app, exe = matched
         try:
-            subprocess.Popen(exe, shell=True)
+            if exe.startswith('ms-') or exe.endswith(':'):
+                os.startfile(exe)
+            else:
+                subprocess.Popen(exe, shell=True)
             self.speak(f"Opening {app}")
             return {'action': 'open_app', 'app': app, 'success': True}
         except Exception as e:

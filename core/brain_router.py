@@ -147,14 +147,27 @@ class BrainRouter:
         # complex → Claude Opus 4.6
         attempts = []
 
-        if complexity == 'simple' and self._genai:
-            attempts.append(('gemini', None))
-        elif complexity == 'medium' and self._claude:
-            attempts.append(('claude', 'claude-sonnet-4-6'))
-        elif complexity == 'complex' and self._claude:
-            attempts.append(('claude', 'claude-opus-4-6'))
+        if complexity == 'simple':
+            # Gemini first (fast/cheap), Claude Sonnet fallback, Qwen last
+            if self._genai:
+                attempts.append(('gemini', None))
+            if self._claude:
+                attempts.append(('claude', 'claude-sonnet-4-6'))
+        elif complexity == 'medium':
+            # Claude Sonnet primary, Gemini secondary, Qwen last
+            if self._claude:
+                attempts.append(('claude', 'claude-sonnet-4-6'))
+            if self._genai:
+                attempts.append(('gemini', None))
+        elif complexity == 'complex':
+            # Claude Opus primary, Sonnet secondary, Gemini tertiary, Qwen last
+            if self._claude:
+                attempts.append(('claude', 'claude-opus-4-6'))
+                attempts.append(('claude', 'claude-sonnet-4-6'))
+            if self._genai:
+                attempts.append(('gemini', None))
 
-        # Always add Qwen as final fallback
+        # Qwen always last fallback
         attempts.append(('qwen', None))
 
         for backend, model in attempts:
