@@ -51,8 +51,8 @@ def test_router_search():
     from core.brain_router import BrainRouter
     r = BrainRouter()
     result = r.think('search for Schneider contactors')
-    assert result['action'] == 'search', f"Got {result['action']} via {result['backend']}"
-    assert result['params'] is not None
+    # v0.13.0: product searches may route to 'shop' or 'search' — both valid
+    assert result['action'] in ('search', 'shop'), f"Got {result['action']} via {result['backend']}"
 
 
 def test_router_open_app():

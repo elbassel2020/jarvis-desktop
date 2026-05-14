@@ -34,11 +34,16 @@ class JarvisPipeline:
         self.follow_up_until = 0.0
         self.last_activity = time.time()
         self.session_start = time.time()
+        # v0.13.0: always-on conversation mode
+        self.always_on_mode = False
+        self.always_on_until = 0.0
+        self.always_on_extension_minutes = 5
 
         self.listener = WakeListener(
             wake_word=wake_word,
             threshold=wake_threshold,
             on_detect=self.on_wake_detected_safe,
+            always_on_check=self._is_always_on,
         )
         logger.info(f"v0.7.1 Pipeline: STT={whisper_model} Brain={llm_model} Exec={self.execute_enabled}")
 
@@ -224,6 +229,52 @@ class JarvisPipeline:
         except Exception as e:
             logger.warning(f"Proactive scheduler failed: {e}")
 
+        # Curious mode — ask questions during always-on after 30s silence (v0.13.0)
+        try:
+            import random as _rand_curious
+
+            def _run_curious():
+                import time as _time
+                CURIOUS_QUESTIONS = [
+                    'بالمناسبة، إيه آخر أخبار Zamilfood؟',
+                    'يا بابا، فيه RFQ جديدة من SMI؟',
+                    'Schneider أو ABB — إيه اللي بتفكر فيه دلوقتي؟',
+                    'إيه اللي شاغل بالك في MSMA النهارده؟',
+                    'فيه مشروع جديد بتفكر فيه؟',
+                    'إيه اللي لازم تخلصه النهارده؟',
+                ]
+                while True:
+                    _time.sleep(5)
+                    try:
+                        if (self.always_on_mode and
+                                _time.time() < self.always_on_until and
+                                not self.tts_playing and
+                                (_time.time() - self.last_activity) > 30):
+                            q = _rand_curious.choice(CURIOUS_QUESTIONS)
+                            logger.debug(f'Curious mode: {q}')
+                            self.tts_playing = True
+                            self.actions.speak(q)
+                            self.tts_playing = False
+                            self.last_activity = _time.time()
+                    except Exception as _e:
+                        logger.debug(f'Curious: {_e}')
+
+            _cur = threading.Thread(target=_run_curious, daemon=True, name='curious_mode')
+            _cur.start()
+            self.curious_scheduler = _cur
+            logger.info("Curious mode scheduler started (30s silence during always-on)")
+        except Exception as e:
+            logger.warning(f"Curious scheduler failed: {e}")
+
+    def _is_always_on(self) -> bool:
+        """Returns True when always-on mode is active and not expired."""
+        if self.always_on_mode and time.time() < self.always_on_until:
+            return True
+        if self.always_on_mode and time.time() >= self.always_on_until:
+            self.always_on_mode = False
+            logger.info("Always-on mode expired")
+        return False
+
     def on_wake_detected_safe(self, wake_word, score):
         # Skip detection while TTS is playing (anti-feedback loop)
         if self.tts_playing:
@@ -247,21 +298,50 @@ class JarvisPipeline:
 
     def on_wake_detected(self, wake_word, score):
         self.last_activity = time.time()
+        # Auto-extend always-on window on any activity
+        if self.always_on_mode:
+            self.always_on_until = time.time() + self.always_on_extension_minutes * 60
         self.follow_up_mode = False  # reset on explicit wake
         logger.warning(f"WAKE [{score:.2f}] — recording...")
         try:
             audio_path = self.capture.capture()
             transcript = self.transcriber.transcribe(audio_path)
+            text_raw = transcript.get('text', '')
+
+            # v0.13.0: always-on mode toggle — detect enable/disable phrases
+            text_low = text_raw.lower()
+            _enable_phrases = [
+                'خليك تسمع', 'ابقى سامع', 'stay listening', 'حوار مفتوح',
+                'always on', 'keep listening', 'وضع المحادثة',
+            ]
+            _disable_phrases = [
+                'وقف الاستماع', 'stop listening', 'اطفي الوضع', 'خلاص بس',
+                'always off', 'عادي', 'ارجع تاني',
+            ]
+            if any(p in text_low for p in _enable_phrases):
+                self.always_on_mode = True
+                self.always_on_until = time.time() + self.always_on_extension_minutes * 60
+                self.tts_playing = True
+                self.actions.speak('تمام، أنا سامعك يا بابا — مش محتاج تقول hey jarvis')
+                self.tts_playing = False
+                logger.info(f"Always-on mode ENABLED for {self.always_on_extension_minutes}min")
+                return
+            if any(p in text_low for p in _disable_phrases):
+                self.always_on_mode = False
+                self.tts_playing = True
+                self.actions.speak('ماشي، بس عادي تاني')
+                self.tts_playing = False
+                logger.info("Always-on mode DISABLED")
+                return
 
             # Handle pending confirmation BEFORE calling LLM
             if self.pending_action is not None:
-                text_lower = transcript.get('text', '').lower()
-                if any(w in text_lower for w in ['yes', 'تمام', 'ايوة', 'اوكي', 'ok', 'confirm', 'go', 'yep', 'sure']):
+                if any(w in text_low for w in ['yes', 'تمام', 'ايوة', 'اوكي', 'ok', 'confirm', 'go', 'yep', 'sure']):
                     logger.warning(f"  ✓ CONFIRMED: {self.pending_action['intent']}")
                     execution = execute_action(self.pending_action, self.actions)
                     self.pending_action = None
                     return
-                elif any(w in text_lower for w in ['no', 'لا', 'cancel', 'الغاء', 'stop', 'nope']):
+                elif any(w in text_low for w in ['no', 'لا', 'cancel', 'الغاء', 'stop', 'nope']):
                     self.actions.speak('Cancelled')
                     self.pending_action = None
                     return
@@ -270,8 +350,7 @@ class JarvisPipeline:
                     return
 
             # Fast-path: detect stop words before LLM call
-            text_lower = transcript.get('text', '').lower()
-            if any(w in text_lower for w in ['stop', 'خلاص', 'اسكت', 'كفاية', 'بس كده']):
+            if any(w in text_low for w in ['stop', 'خلاص', 'اسكت', 'كفاية', 'بس كده']):
                 try:
                     import pygame
                     pygame.mixer.music.stop()
@@ -283,7 +362,7 @@ class JarvisPipeline:
                 return
 
             # LLM brain decides action + response
-            decision = self.brain.think(transcript['text'])
+            decision = self.brain.think(text_raw)
 
             # Stop action from LLM
             if decision.get('action') == 'stop':
