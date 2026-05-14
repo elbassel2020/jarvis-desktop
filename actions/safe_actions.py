@@ -15,7 +15,7 @@ pygame.mixer.init()
 # ElevenLabs config
 # Brian (nPczCjzI2devNBz1zQrb) — warm, friendly; Turbo model = faster
 _ELEVEN_VOICE_ID = 'nPczCjzI2devNBz1zQrb'  # Brian — warm friendly voice
-_ELEVEN_MODEL = 'eleven_turbo_v2_5'
+_ELEVEN_MODEL = 'eleven_flash_v2_5'
 
 
 class SafeActions:
@@ -280,6 +280,14 @@ class SafeActions:
         subprocess.run(['rundll32.exe', 'powrprof.dll,SetSuspendState', '0,1,0'])
         return {'action': 'sleep_pc', 'success': True}
 
+    def stop(self, transcript=None) -> dict:
+        """Immediate interrupt — stop TTS, clear nothing, stay silent."""
+        try:
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+        return {'action': 'stop', 'success': True}
+
     def morning_brief(self, transcript=None) -> dict:
         try:
             from core.memory import JarvisMemory
@@ -311,6 +319,7 @@ ACTION_MAP = {
     'cancel': 'cancel',
     'system_status': 'system_status',
     'morning_brief': 'morning_brief',
+    'stop': 'stop',
 }
 
 
