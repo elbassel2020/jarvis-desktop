@@ -30,6 +30,14 @@ CREATE TABLE IF NOT EXISTS tuning (
 );
 CREATE INDEX IF NOT EXISTS idx_episodic_time ON episodic(timestamp);
 CREATE INDEX IF NOT EXISTS idx_daily_apps ON daily_apps(date, hour);
+CREATE TABLE IF NOT EXISTS daily_insights (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT, category TEXT, query TEXT, summary TEXT, source_url TEXT, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS morning_briefs (
+    date TEXT PRIMARY KEY, brief TEXT, created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_insights_date ON daily_insights(date, category);
 """
 
 
@@ -178,6 +186,47 @@ class JarvisMemory:
         row = cur.fetchone()
         return row[0] if row else default
 
+    def add_insight(self, category: str, query: str, summary: str, source_url: str = ''):
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT INTO daily_insights (date, category, query, summary, source_url, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (datetime.now().strftime('%Y-%m-%d'), category, query, summary, source_url, datetime.now().isoformat())
+        )
+        self.conn.commit()
+
+    def save_morning_brief(self, brief: str):
+        today = datetime.now().strftime('%Y-%m-%d')
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT OR REPLACE INTO morning_briefs (date, brief, created_at) VALUES (?, ?, ?)",
+            (today, brief, datetime.now().isoformat())
+        )
+        self.conn.commit()
+
+    def get_today_brief(self) -> str:
+        today = datetime.now().strftime('%Y-%m-%d')
+        cur = self.conn.cursor()
+        cur.execute("SELECT brief FROM morning_briefs WHERE date=?", (today,))
+        row = cur.fetchone()
+        return row[0] if row else ''
+
+    def get_recent_insights(self, days: int = 3, limit: int = 10) -> list:
+        since = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT category, query, summary, source_url, date FROM daily_insights "
+            "WHERE date >= ? ORDER BY id DESC LIMIT ?",
+            (since, limit)
+        )
+        return cur.fetchall()
+
+    def get_insights_context(self, days: int = 3) -> str:
+        rows = self.get_recent_insights(days=days, limit=8)
+        if not rows:
+            return ''
+        lines = [f"- [{r[0]}] {r[2]}" for r in rows]
+        return "RECENT LEARNINGS:\n" + '\n'.join(lines)
+
     def stats(self):
         cur = self.conn.cursor()
         cur.execute("SELECT COUNT(*) FROM episodic")
@@ -188,4 +237,8 @@ class JarvisMemory:
         a = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*) FROM reflections")
         r = cur.fetchone()[0]
-        return {'episodes': e, 'facts': s, 'app_records': a, 'reflections': r}
+        cur.execute("SELECT COUNT(*) FROM daily_insights")
+        i = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM morning_briefs")
+        b = cur.fetchone()[0]
+        return {'episodes': e, 'facts': s, 'app_records': a, 'reflections': r, 'insights': i, 'briefs': b}

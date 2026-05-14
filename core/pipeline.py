@@ -62,6 +62,30 @@ class JarvisPipeline:
         except Exception as e:
             logger.warning(f"Reflection scheduler failed: {e}")
 
+        # 6 AM daily learning — daemon thread
+        try:
+            def _run_learning_loop():
+                import time as _time
+                import datetime as _dt
+                while True:
+                    now = _dt.datetime.now()
+                    target = now.replace(hour=6, minute=0, second=0, microsecond=0)
+                    if now >= target:
+                        target = target + _dt.timedelta(days=1)
+                    _time.sleep((target - now).total_seconds())
+                    try:
+                        from core.daily_learning import DailyLearner
+                        DailyLearner(memory=self.memory).run()
+                    except Exception as _e:
+                        logger.debug(f"Learning loop: {_e}")
+
+            _lt = threading.Thread(target=_run_learning_loop, daemon=True, name='daily_learning')
+            _lt.start()
+            self.learning_thread = _lt
+            logger.info("Daily learning scheduler started (fires at 06:00)")
+        except Exception as e:
+            logger.warning(f"Learning scheduler failed: {e}")
+
     def on_wake_detected_safe(self, wake_word, score):
         now = time.time()
         if now < self.cooldown_until:

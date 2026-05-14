@@ -49,7 +49,7 @@ def _parse_json(raw: str) -> dict:
 class LLMBrain:
     """Thin wrapper — delegates to BrainRouter for multi-LLM routing (v0.6.0)."""
 
-    def __init__(self, model='claude-sonnet-4-6', fallback_model='qwen2.5:7b'):
+    def __init__(self, model='qwen2.5:7b', fallback_model='qwen2.5:7b'):
         self.model = model
         self.fallback_model = fallback_model
         from core.brain_router import BrainRouter

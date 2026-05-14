@@ -280,6 +280,21 @@ class SafeActions:
         subprocess.run(['rundll32.exe', 'powrprof.dll,SetSuspendState', '0,1,0'])
         return {'action': 'sleep_pc', 'success': True}
 
+    def morning_brief(self, transcript=None) -> dict:
+        try:
+            from core.memory import JarvisMemory
+            mem = JarvisMemory()
+            brief = mem.get_today_brief()
+            if brief:
+                self.speak(brief)
+                return {'action': 'morning_brief', 'brief': brief, 'success': True}
+            else:
+                self.speak("No brief yet for today. Learning runs at 6 AM يابابا.")
+                return {'action': 'morning_brief', 'brief': '', 'success': True}
+        except Exception as e:
+            logger.error(f"morning_brief failed: {e}")
+            return {'action': 'morning_brief', 'error': str(e), 'success': False}
+
 
 ACTION_MAP = {
     'screenshot': 'screenshot',
@@ -295,6 +310,7 @@ ACTION_MAP = {
     'search': 'search',
     'cancel': 'cancel',
     'system_status': 'system_status',
+    'morning_brief': 'morning_brief',
 }
 
 

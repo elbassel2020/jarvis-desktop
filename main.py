@@ -1,4 +1,4 @@
-"""Jarvis Desktop v0.7.2 — Daily Driver."""
+"""Jarvis Desktop v0.8.0 — Daily Driver."""
 import sys
 from loguru import logger
 from core.pipeline import JarvisPipeline
@@ -16,7 +16,7 @@ if not sys.stdout.isatty():
 
 def main():
     logger.info("=" * 60)
-    logger.info("JARVIS DESKTOP v0.7.2 — Daily Driver")
+    logger.info("JARVIS DESKTOP v0.8.0 — Daily Driver")
     logger.info("=" * 60)
 
     pipeline = JarvisPipeline(

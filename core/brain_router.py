@@ -40,6 +40,7 @@ ACTIONS:
 - volume_up, volume_down, mute
 - lock_screen, sleep_pc (DESTRUCTIVE — needs confirmation)
 - search (web)
+- morning_brief: read today's AI-generated morning brief (daily learning digest)
 - chat (free conversation — DEFAULT for questions, advice, casual)
 
 CRITICAL OUTPUT — STRICT JSON ONLY, NO markdown fences:
@@ -147,33 +148,47 @@ class BrainRouter:
         )
 
     def _full_system(self, query: str) -> str:
-        """Build system prompt with relevant memory + screen context."""
+        """Build system prompt with relevant memory + screen context + daily insights."""
         facts = self.memory.get_relevant_facts(query, max_facts=4)
         try:
             screen = self.screen.summary()
         except Exception:
             screen = "Unknown"
         reflection = self.memory.get_latest_reflection()
-        return (
-            SYSTEM_PROMPT
-            + f"\n\nRELEVANT CONTEXT:\n{facts}"
-            + f"\n\nDESKTOP NOW:\n{screen}"
-            + f"\n\n{reflection}"
-        )
+        insights = self.memory.get_insights_context(days=3)
+        brief = self.memory.get_today_brief()
+        parts = [
+            SYSTEM_PROMPT,
+            f"\n\nRELEVANT CONTEXT:\n{facts}",
+            f"\n\nDESKTOP NOW:\n{screen}",
+            f"\n\n{reflection}",
+        ]
+        if insights:
+            parts.append(f"\n\n{insights}")
+        if brief:
+            parts.append(f"\n\nTODAY'S BRIEF:\n{brief[:300]}")
+        return ''.join(parts)
 
-    def _call_claude(self, transcript: str, model: str) -> dict:
+    def _call_claude(self, transcript: str, model: str, use_web: bool = False) -> dict:
         t0 = time.time()
-        resp = self._claude.messages.create(
+        kwargs = dict(
             model=model,
             max_tokens=600,
             system=self._full_system(transcript),
             messages=[{"role": "user", "content": transcript}],
         )
-        raw = resp.content[0].text.strip()
+        if use_web:
+            kwargs['tools'] = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 2}]
+        resp = self._claude.messages.create(**kwargs)
+        # Extract all text blocks (web_search may return ToolUseBlock + TextBlock)
+        raw = ' '.join(
+            block.text for block in resp.content if hasattr(block, 'text')
+        ).strip()
         elapsed = time.time() - t0
         result = _build_result(_parse_result(raw), elapsed, transcript, f'anthropic/{model}')
         logger.success(
-            f"[{elapsed:.1f}s {model}] {result['action']} conf={result['confidence']:.2f}"
+            f"[{elapsed:.1f}s {model}{'🌐' if use_web else ''}] "
+            f"{result['action']} conf={result['confidence']:.2f}"
         )
         if result['thinking']:
             logger.info(f"  💭 {result['thinking']}")
@@ -248,8 +263,9 @@ class BrainRouter:
                 attempts.append(('gemini', self._call_gemini))
         elif complexity == 'complex':
             if self._claude:
-                attempts.append(('claude-opus', lambda t: self._call_claude(t, 'claude-opus-4-6')))
-                attempts.append(('claude-sonnet', lambda t: self._call_claude(t, 'claude-sonnet-4-6')))
+                # Web search enabled for complex queries — may surface fresh data
+                attempts.append(('claude-opus-web', lambda t: self._call_claude(t, 'claude-opus-4-6', use_web=True)))
+                attempts.append(('claude-sonnet-web', lambda t: self._call_claude(t, 'claude-sonnet-4-6', use_web=True)))
             if self._genai:
                 attempts.append(('gemini', self._call_gemini))
 
