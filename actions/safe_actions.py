@@ -304,6 +304,50 @@ class SafeActions:
             return {'action': 'morning_brief', 'error': str(e), 'success': False}
 
 
+    def vision(self, transcript=None) -> dict:
+        """Analyze an image — clipboard first, then most recent screenshot."""
+        from core.vision import JarvisVision
+        v = JarvisVision()
+        img = v.from_clipboard()
+        if not img:
+            img = v.find_recent_image()
+        if not img:
+            self.speak('مفيش صورة لقيتها')
+            return {'action': 'vision', 'error': 'no image', 'success': False}
+        result = v.analyze(img)
+        if result.get('success'):
+            self.speak(result['description'])
+            return {'action': 'vision', 'description': result['description'], 'image': str(img), 'success': True}
+        self.speak('حصل مشكلة في التحليل')
+        return {'action': 'vision', 'error': result.get('error'), 'success': False}
+
+    def shop(self, transcript=None) -> dict:
+        """Search KSA suppliers for electrical products."""
+        from core.shopping import ShoppingAssistant
+        query = transcript or ''
+        for w in ['shop', 'shopping', 'buy', 'search for', 'اشتري', 'دور على', 'هات', 'سعر']:
+            query = query.replace(w, '').strip()
+        if not query:
+            self.speak('قولي اسم المنتج')
+            return {'action': 'shop', 'error': 'no query', 'success': False}
+        result = ShoppingAssistant().search(query)
+        if result.get('success'):
+            self.speak(result['results'][:300])
+            return {'action': 'shop', 'results': result['results'], 'success': True}
+        self.speak('مش لاقي معلومات دلوقتي')
+        return {'action': 'shop', 'error': result.get('error'), 'success': False}
+
+    def analyze_code(self, transcript=None) -> dict:
+        """Read-only self-review of all core/ files."""
+        from core.self_analyze import SelfAnalyzer
+        self.speak('بحلل الكود بتاعي، استنى ثواني')
+        result = SelfAnalyzer().analyze_self()
+        if result.get('success'):
+            self.speak(f'حللت {result["files_analyzed"]} files. الـ report في audits folder')
+            return {'action': 'analyze_code', 'report': result['report_file'], 'success': True}
+        return {'action': 'analyze_code', 'error': 'failed', 'success': False}
+
+
 ACTION_MAP = {
     'screenshot': 'screenshot',
     'time': 'time',
@@ -320,6 +364,9 @@ ACTION_MAP = {
     'system_status': 'system_status',
     'morning_brief': 'morning_brief',
     'stop': 'stop',
+    'vision': 'vision',
+    'shop': 'shop',
+    'analyze_code': 'analyze_code',
 }
 
 
