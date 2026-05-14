@@ -9,7 +9,7 @@ from datetime import datetime
 
 class VoiceCapture:
     def __init__(self, duration=5, samplerate=16000, use_vad=True,
-                 silence_duration=1.0, silence_threshold=0.01):
+                 silence_duration=1.2, silence_threshold=0.012):
         self.duration = duration
         self.samplerate = samplerate
         self.use_vad = use_vad
