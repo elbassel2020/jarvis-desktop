@@ -459,6 +459,112 @@ class SafeActions:
             return {'action': 'attention', 'error': str(e), 'success': False}
 
 
+    # ── v0.14.0 Sprint E: intelligence layer voice commands ──────────────
+
+    def council_action(self, transcript=None) -> dict:
+        """Ask council (3-LLM ensemble) a question from voice."""
+        question = (transcript or '').strip()
+        if not question:
+            self.speak("What would you like me to deliberate on?")
+            return {'action': 'council', 'error': 'no question', 'success': False}
+        try:
+            from jarvis.intelligence.council import council_decide
+            result = asyncio.run(council_decide(question=question))
+            summary = result.decision[:500] if result.decision else "No decision reached."
+            self.speak(summary)
+            return {
+                'action': 'council',
+                'decision': result.decision,
+                'confidence': result.confidence,
+                'cost_usd_cents': result.cost_usd_cents,
+                'success': True,
+            }
+        except Exception as exc:
+            logger.error(f"council_action: {exc}")
+            self.speak("Council unavailable right now.")
+            return {'action': 'council', 'error': str(exc), 'success': False}
+
+    def council_brief(self, transcript=None) -> dict:
+        """Speak the daily brief; generate if not yet cached."""
+        try:
+            from jarvis.tasks.daily_brief import get_brief, generate_brief
+            brief = get_brief()
+            if not brief:
+                result = asyncio.run(generate_brief())
+                brief = result.get('content', result.get('brief', ''))
+            if brief:
+                self.speak(brief[:500])
+                return {'action': 'council_brief', 'brief': brief, 'success': True}
+            self.speak("No brief available for today.")
+            return {'action': 'council_brief', 'brief': '', 'success': True}
+        except Exception as exc:
+            logger.error(f"council_brief: {exc}")
+            self.speak("Brief unavailable right now.")
+            return {'action': 'council_brief', 'error': str(exc), 'success': False}
+
+    def ask_agent(self, transcript=None) -> dict:
+        """Route query to specialist agent (sales/research/email/customer)."""
+        query = (transcript or '').strip()
+        if not query:
+            self.speak("What would you like to ask?")
+            return {'action': 'ask_agent', 'error': 'no query', 'success': False}
+        try:
+            from jarvis.agents.router import route_to_agent
+            result = asyncio.run(route_to_agent(query=query))
+            summary = result.text[:500] if result.text else "No response."
+            self.speak(summary)
+            return {
+                'action': 'ask_agent',
+                'agent': result.agent,
+                'text': result.text,
+                'success': True,
+            }
+        except Exception as exc:
+            logger.error(f"ask_agent: {exc}")
+            self.speak("Agent unavailable right now.")
+            return {'action': 'ask_agent', 'error': str(exc), 'success': False}
+
+    def health_check(self, transcript=None) -> dict:
+        """Report how many integrations are configured."""
+        try:
+            from jarvis.dashboard import get_health_status
+            status = get_health_status()
+            configured = sum(
+                1 for v in status['integrations'].values() if v == 'configured'
+            )
+            total = len(status['integrations'])
+            summary = f"{configured} of {total} integrations configured."
+            self.speak(summary)
+            return {'action': 'health_check', 'status': status, 'success': True}
+        except Exception as exc:
+            logger.error(f"health_check: {exc}")
+            self.speak("Health check failed.")
+            return {'action': 'health_check', 'error': str(exc), 'success': False}
+
+    def plan_action(self, transcript=None) -> dict:
+        """Decompose a complex task into a plan via council."""
+        query = (transcript or '').strip()
+        if not query:
+            self.speak("What task should I plan?")
+            return {'action': 'plan', 'error': 'no query', 'success': False}
+        try:
+            from jarvis.intelligence.orchestrator import plan_actions
+            plan = asyncio.run(plan_actions(query=query))
+            summary = f"Plan: {len(plan.steps)} steps, risk {plan.risk_level}."
+            self.speak(summary)
+            return {
+                'action': 'plan',
+                'steps': len(plan.steps),
+                'risk_level': plan.risk_level,
+                'rationale': plan.rationale,
+                'success': True,
+            }
+        except Exception as exc:
+            logger.error(f"plan_action: {exc}")
+            self.speak("Planning failed.")
+            return {'action': 'plan', 'error': str(exc), 'success': False}
+
+
 ACTION_MAP = {
     'screenshot': 'screenshot',
     'time': 'time',
@@ -486,6 +592,12 @@ ACTION_MAP = {
     'jarvis_silent': 'jarvis_silent',
     'jarvis_unmute': 'jarvis_unmute',
     'quiet_2h': 'quiet_2h',
+    # v0.14.0 Sprint E — intelligence layer
+    'council':       'council_action',
+    'brief':         'council_brief',
+    'ask':           'ask_agent',
+    'health':        'health_check',
+    'plan':          'plan_action',
 }
 
 
