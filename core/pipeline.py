@@ -16,12 +16,13 @@ from datetime import datetime
 
 class JarvisPipeline:
     def __init__(self, capture_duration=5, whisper_model='whisper-1',
-                 wake_word='hey_jarvis', wake_threshold=0.45, llm_model='qwen2.5:7b'):
+                 wake_word='hey_jarvis', wake_threshold=0.65, llm_model='qwen2.5:7b'):
         self.capture = VoiceCapture(duration=capture_duration)
         self.transcriber = Transcriber(model_name=whisper_model)
         self.memory = JarvisMemory()
         self.brain = LLMBrain(model=llm_model)
         self.actions = SafeActions()
+        self.actions._pipeline_ref = self  # v0.13.1: lets speak() check silent_mode
         self.execute_enabled = os.getenv('ENABLE_ACTIONS', 'false').lower() == 'true'
         self.audit_log = Path('logs/pipeline.jsonl')
         self.audit_log.parent.mkdir(exist_ok=True)
@@ -38,6 +39,9 @@ class JarvisPipeline:
         self.always_on_mode = False
         self.always_on_until = 0.0
         self.always_on_extension_minutes = 5
+        # v0.13.1: quiet controls
+        self.silent_mode = False       # Ctrl+Alt+M toggles
+        self.quiet_hours_until = 0.0   # Ctrl+Alt+Q sets +2h
 
         self.listener = WakeListener(
             wake_word=wake_word,
@@ -139,6 +143,27 @@ class JarvisPipeline:
             keyboard.add_hotkey('ctrl+alt+s', _global_stop)
             self.global_stop_hotkey = True
             logger.info("Hotkey: Ctrl+Alt+S = STOP")
+
+            # v0.13.1: quiet hotkeys
+            def _toggle_silent():
+                self.silent_mode = not self.silent_mode
+                logger.warning(f'SILENT MODE: {self.silent_mode}')
+                try:
+                    import pygame as _pg
+                    _pg.mixer.music.stop()
+                except Exception:
+                    pass
+                if not self.silent_mode:
+                    self.actions.speak('رجعت')
+
+            def _quiet_2h():
+                self.quiet_hours_until = time.time() + 7200
+                logger.warning('QUIET HOURS: 2h enabled')
+                self.actions.speak('تمام، ساعتين هادي')
+
+            keyboard.add_hotkey('ctrl+alt+m', _toggle_silent)
+            keyboard.add_hotkey('ctrl+alt+q', _quiet_2h)
+            logger.info("Hotkeys: Ctrl+Alt+M=silent, Ctrl+Alt+Q=2h quiet")
         except Exception as e:
             logger.warning(f"Hotkey setup failed: {e}")
 
@@ -204,6 +229,10 @@ class JarvisPipeline:
                 while True:
                     _time.sleep(30 * 60)  # check every 30 min
                     try:
+                        if getattr(self, 'silent_mode', False):
+                            continue
+                        if _time.time() < getattr(self, 'quiet_hours_until', 0.0):
+                            continue
                         idle_min = (_time.time() - self.last_activity) / 60
                         if idle_min > 60:
                             msg = _random.choice(CHECK_INS)
@@ -246,6 +275,10 @@ class JarvisPipeline:
                 while True:
                     _time.sleep(5)
                     try:
+                        if getattr(self, 'silent_mode', False):
+                            continue
+                        if _time.time() < getattr(self, 'quiet_hours_until', 0.0):
+                            continue
                         if (self.always_on_mode and
                                 _time.time() < self.always_on_until and
                                 not self.tts_playing and
