@@ -4,6 +4,7 @@ Health Dashboard + Audit Reports.
 get_health_status() — snapshot of integrations, task queue, memory stats.
 get_audit_report(days) — multi-day audit summary by actor/outcome.
 """
+import logging
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -11,6 +12,8 @@ from typing import Optional
 
 from jarvis.security.audit import daily_summary, query_audit
 from jarvis.security.credential_broker import broker
+
+_logger = logging.getLogger("jarvis.dashboard.health")
 
 _MEMORY_DB = Path(__file__).parent.parent.parent / "data" / "memory.db"
 _TASK_DB   = Path(__file__).parent.parent.parent / "data" / "memory.db"
@@ -31,7 +34,8 @@ def _check_integrations() -> dict:
         try:
             val = broker.resolve(handle)
             result[name] = "configured" if val else "missing"
-        except Exception:
+        except Exception as exc:
+            _logger.debug(f"Credential check failed for {name}: {exc}")
             result[name] = "missing"
     return result
 
@@ -46,7 +50,8 @@ def _check_task_queue() -> dict:
                     "SELECT COUNT(*) FROM task_queue WHERE status = ?", (status,)
                 ).fetchone()[0]
                 counts[status] = n
-            except Exception:
+            except Exception as exc:
+                _logger.debug(f"Task queue count failed for status={status}: {exc}")
                 counts[status] = 0
         conn.close()
         return counts
@@ -63,7 +68,8 @@ def _check_memory() -> dict:
             try:
                 n = conn.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
                 stats[tbl] = n
-            except Exception:
+            except Exception as exc:
+                _logger.debug(f"Memory table count failed for {tbl}: {exc}")
                 stats[tbl] = 0
         conn.close()
     except Exception as exc:
