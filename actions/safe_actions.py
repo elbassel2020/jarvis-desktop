@@ -75,6 +75,9 @@ class SafeActions:
 
     def speak(self, text: str, voice='en-US-AriaNeural'):
         """ElevenLabs primary TTS, edge-tts fallback. Plays blocking via pygame."""
+        # v0.13.1: respect silent_mode
+        if getattr(getattr(self, '_pipeline_ref', None), 'silent_mode', False):
+            return None
         eleven_key = os.getenv('ELEVENLABS_API_KEY')
         out_path = None
 
@@ -417,6 +420,29 @@ class SafeActions:
             logger.error(f"ask_customer: {e}")
             return {'action': 'ask_customer', 'error': str(e), 'success': False}
 
+    def jarvis_silent(self, transcript=None) -> dict:
+        """Enable silent mode via voice — no spoken confirmation (would defeat purpose)."""
+        if hasattr(self, '_pipeline_ref'):
+            self._pipeline_ref.silent_mode = True
+            logger.warning('SILENT MODE enabled via voice')
+        return {'action': 'jarvis_silent', 'success': True}
+
+    def jarvis_unmute(self, transcript=None) -> dict:
+        """Disable silent mode and confirm verbally."""
+        if hasattr(self, '_pipeline_ref'):
+            self._pipeline_ref.silent_mode = False
+        self.speak('رجعت شغّال')
+        return {'action': 'jarvis_unmute', 'success': True}
+
+    def quiet_2h(self, transcript=None) -> dict:
+        """Suppress proactive interruptions for 2 hours."""
+        if hasattr(self, '_pipeline_ref'):
+            import time as _t
+            self._pipeline_ref.quiet_hours_until = _t.time() + 7200
+            logger.warning('QUIET HOURS: 2h via voice')
+        self.speak('تمام، ساعتين هادي')
+        return {'action': 'quiet_2h', 'success': True}
+
     def attention(self, transcript=None) -> dict:
         """Speak items from MSMA that need Walid's attention."""
         try:
@@ -457,6 +483,9 @@ ACTION_MAP = {
     'msma_status': 'msma_status',
     'ask_customer': 'ask_customer',
     'attention': 'attention',
+    'jarvis_silent': 'jarvis_silent',
+    'jarvis_unmute': 'jarvis_unmute',
+    'quiet_2h': 'quiet_2h',
 }
 
 
