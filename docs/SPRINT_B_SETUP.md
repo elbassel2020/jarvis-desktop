@@ -163,3 +163,51 @@ report = get_audit_report(days=7)
 # report["by_actor"]  → {agent:sales: 12, council: 5, ...}
 # report["by_outcome"] → {ok: 90, error:ValueError: 2, ...}
 ```
+
+---
+
+## v0.14.0-beta.4 — Sprint E: Bridge Client + Voice Wiring (May 17, 2026)
+
+### MSMA Bridge Client
+Talks to MSMA Bot bridge server with HMAC-SHA256 per-request auth.
+```python
+from jarvis.bridges import MsmaBridgeClient, BridgeNotConfiguredError
+
+client = MsmaBridgeClient()  # reads cred://msma_bridge/hmac_key
+
+# Create a quote
+quote = await client.create_quote(
+    customer="Zamilfood",
+    items=[{"sku": "CB-16A", "qty": 10, "unit_price": 45.0}],
+)
+
+# Full workflow
+invoice = await client.send_invoice(quote["quote_id"], "ceo@zamilfood.com")
+payment = await client.log_payment(invoice["invoice_id"], 4500.0, "bank_transfer", "TXN-001")
+
+# Other endpoints
+balance = await client.customer_balance("Zamilfood")
+quotes  = await client.list_open_quotes(customer="Zamilfood")
+health  = await client.health()
+```
+
+### Mock Server (local testing)
+```bash
+# Standalone
+python scripts/mock_msma_bridge.py --port 9000
+
+# In tests
+from scripts.mock_msma_bridge import start_mock_server, stop_mock_server
+server = start_mock_server(port=9001, hmac_key="test-key")
+# ... run tests ...
+stop_mock_server(server)
+```
+
+### 5 New Voice Commands
+| Voice command | Intent | Action |
+|---|---|---|
+| "council: should I offer a discount?" | `council` | 3-LLM ensemble decision |
+| "brief" / "daily brief" | `brief` | Speak cached or generate morning brief |
+| "ask: what are ZATCA requirements?" | `ask` | Route to specialist agent |
+| "health" / "system health" | `health` | Report integration status |
+| "plan: find quote and draft follow-up" | `plan` | Decompose task into steps |
