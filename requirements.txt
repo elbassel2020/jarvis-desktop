@@ -23,7 +23,11 @@ cryptography>=42.0.0
 pyyaml>=6.0.0
 pytest-asyncio>=0.23.0
 
-# Sprint B — account integrations
+# Sprint B/C — account integrations + memory
+sqlite-vec>=0.1.9
+sentence-transformers>=3.0.0
+
+
 google-api-python-client>=2.140.0
 google-auth-oauthlib>=1.2.1
 google-auth-httplib2>=0.2.0
