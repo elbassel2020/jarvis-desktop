@@ -386,6 +386,53 @@ class SafeActions:
         return {'action': 'my_status', 'turns': today_turns, 'insights': insights, 'success': True}
 
 
+    def msma_status(self, transcript=None) -> dict:
+        """Read MSMA DB and speak latest status summary."""
+        try:
+            from core.msma_reader import MSMAReader
+            text = MSMAReader().summary_text()
+            self.speak(text)
+            return {'action': 'msma_status', 'summary': text, 'success': True}
+        except Exception as e:
+            logger.error(f"msma_status: {e}")
+            self.speak('مش قادر أوصل لـ MSMA دلوقتي')
+            return {'action': 'msma_status', 'error': str(e), 'success': False}
+
+    def ask_customer(self, transcript=None) -> dict:
+        """Look up a specific customer in the MSMA DB."""
+        from core.msma_reader import MSMAReader
+        query = (transcript or '').lower()
+        known = ['zamilfood', 'smi', 'olayan', 'bhig', 'taj']
+        customer = next((c for c in known if c in query), None)
+        try:
+            quotes = MSMAReader().latest_quote_for(customer=customer, limit=5)
+            if quotes:
+                status = quotes[0].get('status', '?')
+                msg = f"{customer or 'العميل'}: {len(quotes)} quote، آخر واحد {status}"
+            else:
+                msg = f"مفيش quotes للـ {customer or 'العميل ده'}"
+            self.speak(msg)
+            return {'action': 'ask_customer', 'quotes': quotes, 'success': True}
+        except Exception as e:
+            logger.error(f"ask_customer: {e}")
+            return {'action': 'ask_customer', 'error': str(e), 'success': False}
+
+    def attention(self, transcript=None) -> dict:
+        """Speak items from MSMA that need Walid's attention."""
+        try:
+            from core.msma_reader import MSMAReader
+            items = MSMAReader().attention_items()
+            if items:
+                msg = f"عندك {len(items)} بند بيستنى منك يا بابا"
+            else:
+                msg = "كل حاجة تمام، مفيش حاجة معلقة"
+            self.speak(msg)
+            return {'action': 'attention', 'items': items, 'success': True}
+        except Exception as e:
+            logger.error(f"attention: {e}")
+            return {'action': 'attention', 'error': str(e), 'success': False}
+
+
 ACTION_MAP = {
     'screenshot': 'screenshot',
     'time': 'time',
@@ -407,6 +454,9 @@ ACTION_MAP = {
     'analyze_code': 'analyze_code',
     'msma_help': 'msma_help',
     'my_status': 'my_status',
+    'msma_status': 'msma_status',
+    'ask_customer': 'ask_customer',
+    'attention': 'attention',
 }
 
 
