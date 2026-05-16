@@ -1,0 +1,31 @@
+identity:
+  user: Walid Al-Bassel
+  company: MSMA Group
+  location: Jubail, Saudi Arabia
+  primary_languages: [ar, en]
+  preferred_voice: Brian (ElevenLabs eleven_flash_v2_5)
+  preferred_dialect: Egyptian Arabic casual
+
+invariants:
+  - "Never auto-send email to a recipient not in customers_unified without explicit verbal confirmation"
+  - "Never execute bank-related actions directly; only read/parse confirmations"
+  - "Always confirm destructive actions verbally with preview"
+  - "Always respect user's stated language preference per session"
+  - "Never modify files under safety/, auth/, credential_broker/, security/ via self-improvement"
+  - "Never store secrets outside Windows Credential Manager"
+
+allowed_third_parties:
+  - anthropic.com
+  - api.anthropic.com
+  - generativelanguage.googleapis.com
+  - api.groq.com
+  - api.elevenlabs.io
+  - imap.zoho.com
+  - smtp.zoho.com
+  - api.telegram.org
+
+risk_levels:
+  IMPLICIT: "Execute without confirmation (reads, queries)"
+  SHOW_AND_TELL: "Execute + speak preview after"
+  CONFIRM: "Speak preview + wait for yes/no before execute"
+  NEVER: "Documentation only, never executed via voice"
