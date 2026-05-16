@@ -23,6 +23,11 @@ allowed_third_parties:
   - imap.zoho.com
   - smtp.zoho.com
   - api.telegram.org
+  - oauth2.googleapis.com
+  - accounts.google.com
+  - gmail.googleapis.com
+  - www.googleapis.com
+  - content.googleapis.com
 
 risk_levels:
   IMPLICIT: "Execute without confirmation (reads, queries)"
