@@ -84,3 +84,82 @@ python -c "from jarvis.integrations.gdrive import search; print('Drive search:',
 ```
 
 All should return numbers (0 or more) without errors.
+
+---
+
+## v0.14.0-beta.3 — Intelligence Layer (May 17, 2026)
+
+### 1. Council Mode
+Parallel LLM ensemble (Sonnet + Haiku + Gemini Flash-Lite → synthesis pass).
+```python
+from jarvis.intelligence import council_decide
+result = await council_decide(
+    "How should I reply to an angry customer?",
+    context="Customer received wrong price quote 3 times."
+)
+print(result.decision)      # synthesized recommendation
+print(result.confidence)    # 0.0–1.0
+print(result.cost_usd_cents)
+```
+
+### 2. Specialist Agents
+Four agents auto-routed by keyword (Arabic + English).
+```python
+from jarvis.agents import route_to_agent, detect_agent
+
+# Auto-route
+result = await route_to_agent("Tell me about Zamilfood's order history")
+# → CustomerAgent enriched with deepdive summary
+
+# Force an agent
+result = await route_to_agent(
+    "Draft a follow-up email",
+    agent_name="email",
+    context="Customer hasn't replied in 10 days."
+)
+```
+Agents: `sales`, `research`, `email`, `customer`.
+
+### 3. Daily Morning Brief
+Council-synthesized morning summary, cached in `daily_briefs` table.
+```python
+from jarvis.tasks.daily_brief import generate_brief, get_brief
+await generate_brief()               # or schedule via task queue
+print(get_brief())                   # returns cached content
+# Enqueue via scheduler:
+from jarvis.tasks.queue import enqueue
+enqueue("daily_brief", {})
+```
+
+### 4. Action Orchestrator
+LLM decomposes complex requests into ordered, executable steps.
+```python
+from jarvis.intelligence import plan_actions, execute_plan
+
+plan = await plan_actions(
+    "Find Zamilfood's last quote and draft a follow-up email",
+    context="We haven't heard from them in 3 weeks."
+)
+# plan.steps → [customer_lookup, email_draft]
+# plan.risk_level → "MEDIUM"
+
+results = await execute_plan(
+    plan,
+    action_handlers={"customer_lookup": ..., "email_draft": ...},
+    confirm_callback=async_confirm_fn,   # called for email_send_draft etc.
+)
+```
+
+### 5. Health Dashboard
+```python
+from jarvis.dashboard import get_health_status, get_audit_report
+
+status = get_health_status()
+# status["integrations"] → {gmail: "configured", zoho: "missing", ...}
+# status["task_queue"]   → {pending: 2, completed: 148, ...}
+# status["memory"]       → {semantic: 315, daily_briefs: 7, ...}
+
+report = get_audit_report(days=7)
+# report["by_actor"]  → {agent:sales: 12, council: 5, ...}
+# report["by_outcome"] → {ok: 90, error:ValueError: 2, ...}
+```
